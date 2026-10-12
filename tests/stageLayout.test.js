@@ -151,6 +151,14 @@ test('設定のステージ：穴のふちの足場が狭すぎない（獲物�
   }
 });
 
+test('設定のステージ：出発地点は一番上の床の檻のそば（穴の上ではない）', () => {
+  const { startFloor, startX, width } = CONFIG.player;
+  assert.equal(startFloor, CONFIG.cage.floor, '檻と同じ床から出発する');
+  const floor = stage.floors[startFloor];
+  assert.ok(floorAt(stage, startX - width / 2, floor.y) && floorAt(stage, startX + width / 2, floor.y), '出発地点が穴にかかっている');
+  assert.ok(Math.abs(startX - CONFIG.cage.x) <= 250, '出発地点が檻から離れすぎている');
+});
+
 test('設定のステージ：檻と焚き火は穴の上に置かれていない', () => {
   const top = stage.floors[CONFIG.cage.floor];
   const onFloor = (x1, x2) => top.segments.some((segment) => x1 >= segment.x1 && x2 <= segment.x2);

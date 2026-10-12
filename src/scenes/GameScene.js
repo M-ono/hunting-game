@@ -80,7 +80,7 @@ export class GameScene extends Phaser.Scene {
     if (this.registry.get('debug')) this.setupDebugKeys();
 
     this.updateHud();
-    this.showBanner('スタート！\n獲物を捕まえて一番上の檻へ');
+    this.showBanner('スタート！\n穴から降りて獲物を捕まえ、檻へ運ぼう');
   }
 
   update(_time, delta) {

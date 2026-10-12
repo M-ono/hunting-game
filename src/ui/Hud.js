@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { DEPTH } from '../constants.js';
 import { describeEffect } from '../systems/cooking.js';
+import { formatClock } from '../utils/format.js';
 import { addText } from './text.js';
 
 /** 画面上部の帯：残り時間・スコア・所持数・速度・料理の効果 */
@@ -36,8 +37,7 @@ export class Hud {
    * @param {{ type: string, value: number, remainingMs: number }[]} state.effects 効いている効果
    */
   update({ remainingMs, score, carried, capacity, speedRate, effects }) {
-    const seconds = Math.ceil(remainingMs / 1000);
-    this.timeText.setText(`のこり ${seconds}`).setColor(seconds <= 10 ? '#ff6b6b' : '#ffffff');
+    this.timeText.setText(`のこり ${formatClock(remainingMs)}`).setColor(remainingMs <= 10000 ? '#ff6b6b' : '#ffffff');
     this.scoreText.setText(`スコア ${score}`);
     this.carryText.setText(`所持 ${carried}/${capacity}`).setColor(carried >= capacity ? '#ffe066' : '#ffffff');
     this.speedText.setText(`速度 ${Math.round(speedRate * 100)}%`);
