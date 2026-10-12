@@ -15,6 +15,7 @@
 | `npm run build` | `dist/` に本番用ファイルを作る |
 | `npm run preview` | ビルド結果を確認する |
 | `npm test` | 単体テスト（`node --test`、追加の依存なし） |
+| `npm run build:artifact` | Claude 上で試遊するページ用に `dist-artifact/` を作る（下の「Claude 上で試遊」） |
 
 確認用：URL の末尾に `?debug` を付けると、当たり判定の表示・`window.game`／`window.CONFIG` の公開（開発者ツールから数値をその場で変えられる）・C キーで料理の効果を即付与（檻の獲物は減らない）が有効になる。
 
@@ -70,6 +71,8 @@
 ```
 index.html                 スマホ向けの viewport・スクロール/ズーム禁止
 vite.config.js             base: './'（GitHub Pages のサブパスで動くように）
+vite.artifact.config.js    Claude 上の試遊ページ用ビルド（Phaser は CDN、ゲームのコードだけを game.js に）
+artifact/                  試遊ページの元（index.html）と、CDN の Phaser を渡す phaser-global.js
 .github/workflows/deploy.yml  PR ではテスト＋ビルド、main への push で Pages に公開
 src/
   main.js                  Phaser.Game の設定（EXPAND・重力・シーン・?debug）
@@ -83,6 +86,12 @@ src/
   utils/                   camera（中央合わせ）bestScore（localStorage）
 tests/                     playerStats / cooking / stageLayout の単体テスト
 ```
+
+## Claude 上で試遊（アーティファクト）
+- 試遊ページ：https://claude.ai/artifact/92vc5RTCCxj2NJ2Fz1LJF5 （非公開。オーナーと、共有した人だけが開ける）
+- 更新：`npm run build:artifact` を実行し、`dist-artifact/index.html` を同じアーティファクトに再公開する（`files` に `game.js` → `dist-artifact/game.js`）。別の会話からは上の URL を `url` に指定して再公開する
+- アーティファクトは決まった CDN からしかライブラリを読めないため、Phaser は jsDelivr（`phaser@4.2.1`）から読み、`artifact/phaser-global.js` で `import Phaser from 'phaser'` を置き換えている。Phaser の版を上げるときは `artifact/index.html` の URL も合わせて変える
+- ページの元は `artifact/index.html`（`<!doctype>`・`<head>`・`<body>` はアーティファクト側で付くので書かない）
 
 ## 公開（GitHub Pages）
 - main に push（またはマージ）すると `.github/workflows/deploy.yml` がテスト・ビルドして公開する。Actions タブの「Run workflow」で手動実行もできる
