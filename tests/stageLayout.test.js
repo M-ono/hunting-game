@@ -5,6 +5,7 @@ import {
   buildStage,
   canJumpUp,
   floorAt,
+  floorGaps,
   floorSegments,
   isClearOfObstacles,
   noPreyZoneAt,
@@ -67,12 +68,24 @@ test('同じ段かどうか・障害物との重なり', () => {
   assert.equal(isClearOfObstacles(mini, 1, 600, 30), true);
 });
 
-test('ジャンプで一段上に届くか（高さと、足場の重なり）', () => {
-  const [lower, upper] = mini.floors;
-  assert.equal(canJumpUp(lower, upper, 350), true);
-  assert.equal(canJumpUp(lower, upper, 310), false); // 高さが足りない
-  const narrow = { y: 700, segments: [{ x1: 950, x2: 1080 }] };
-  assert.equal(canJumpUp(lower, narrow, 350), false); // 足場の重なりが狭い
+test('床のすき間（穴と、画面の端と床の間）', () => {
+  assert.deepEqual(floorGaps(mini.floors[0], 0, 1000), []);
+  assert.deepEqual(floorGaps(mini.floors[1], 0, 1000), [
+    { x1: 350, x2: 450 },
+    { x1: 800, x2: 1000 },
+  ]);
+});
+
+test('一段上に登れるか（床は下から通れないので、穴を通る）', () => {
+  const [lower, upper] = mini.floors; // 上の床には 100px の穴と、右端に 200px のすき間がある
+  const base = { bodyWidth: 56, fieldX1: 0, fieldX2: 1000 };
+  assert.equal(canJumpUp(lower, upper, { ...base, jumpHeight: 350 }), true); // 右端の 200px のすき間を通れる
+  assert.equal(canJumpUp(lower, upper, { ...base, jumpHeight: 310 }), false); // 高さが足りない
+  const holeOnly = { y: 700, segments: [{ x1: 0, x2: 450 }, { x1: 550, x2: 1000 }] }; // 100px の穴だけ
+  assert.equal(canJumpUp(lower, holeOnly, { ...base, jumpHeight: 350 }), false); // 穴が狭い（56 + 60 > 100）
+  assert.equal(canJumpUp(lower, holeOnly, { ...base, jumpHeight: 350, margin: 20 }), true);
+  const noGround = { y: 1000, segments: [{ x1: 0, x2: 440 }, { x1: 560, x2: 1000 }] }; // 穴の真下も穴
+  assert.equal(canJumpUp(noGround, holeOnly, { ...base, jumpHeight: 350, margin: 20 }), false);
 });
 
 test('檻と焚き火のまわりは獲物が入れない', () => {
@@ -83,12 +96,18 @@ test('檻と焚き火のまわりは獲物が入れない', () => {
   assert.equal(noPreyZoneAt(mini, 100, 1000), null); // 下の段は関係ない
 });
 
-test('設定のステージ：どの床からも、ジャンプで一段上の床に乗れる（一番上まで行ける）', () => {
+test('設定のステージ：どの床からも、穴を通って一段上の床に乗れる（一番上まで行ける）', () => {
   const floors = [...stage.floors].sort((a, b) => b.y - a.y); // 下から順
+  const options = {
+    jumpHeight: CONFIG.player.jumpHeight,
+    bodyWidth: CONFIG.player.width,
+    fieldX1: CONFIG.field.x,
+    fieldX2: CONFIG.field.x + CONFIG.field.width,
+  };
   for (let i = 0; i + 1 < floors.length; i++) {
     assert.ok(
-      canJumpUp(floors[i], floors[i + 1], CONFIG.player.jumpHeight),
-      `床${floors[i].index} → 床${floors[i + 1].index} にジャンプで届かない（間隔 ${floors[i].y - floors[i + 1].y}px、ジャンプ ${CONFIG.player.jumpHeight}px）`,
+      canJumpUp(floors[i], floors[i + 1], options),
+      `床${floors[i].index} → 床${floors[i + 1].index} に登れない（間隔 ${floors[i].y - floors[i + 1].y}px、ジャンプ ${CONFIG.player.jumpHeight}px、穴の幅を確認）`,
     );
   }
   assert.equal(floors.at(-1).index, CONFIG.cage.floor, '檻は一番上の床にある');
@@ -96,17 +115,39 @@ test('設定のステージ：どの床からも、ジャンプで一段上の�
 
 test('設定のステージ：地面以外のどの床にも、飛び降りられる穴がある', () => {
   const lowest = Math.max(...stage.floors.map((f) => f.y));
+  const right = CONFIG.field.x + CONFIG.field.width;
   for (const floor of stage.floors) {
     if (floor.y === lowest) continue;
-    const gaps = [];
-    if (floor.segments[0].x1 > CONFIG.field.x) gaps.push(floor.segments[0].x1 - CONFIG.field.x);
-    for (let i = 0; i + 1 < floor.segments.length; i++) gaps.push(floor.segments[i + 1].x1 - floor.segments[i].x2);
-    const right = CONFIG.field.x + CONFIG.field.width;
-    if (floor.segments.at(-1).x2 < right) gaps.push(right - floor.segments.at(-1).x2);
+    const widths = floorGaps(floor, CONFIG.field.x, right).map((gap) => gap.x2 - gap.x1);
     assert.ok(
-      gaps.some((gap) => gap >= CONFIG.player.width + 40),
+      widths.some((width) => width >= CONFIG.player.width + 40),
       `床${floor.index}にプレイヤーが落ちられる幅の穴がない`,
     );
+  }
+});
+
+test('設定のステージ：上下の段の穴が横に重ならない（穴から落ちると必ず一段下に着く）', () => {
+  const floors = [...stage.floors].sort((a, b) => b.y - a.y); // 下から順
+  const right = CONFIG.field.x + CONFIG.field.width;
+  for (let i = 1; i + 1 < floors.length; i++) {
+    const lowerHoles = floorGaps(floors[i], CONFIG.field.x, right);
+    const upperHoles = floorGaps(floors[i + 1], CONFIG.field.x, right);
+    for (const a of upperHoles) {
+      for (const b of lowerHoles) {
+        assert.ok(
+          Math.min(a.x2, b.x2) <= Math.max(a.x1, b.x1),
+          `床${floors[i + 1].index}の穴 ${a.x1}〜${a.x2} と、床${floors[i].index}の穴 ${b.x1}〜${b.x2} が重なっている`,
+        );
+      }
+    }
+  }
+});
+
+test('設定のステージ：穴のふちの足場が狭すぎない（獲物やプレイヤーが乗れる）', () => {
+  for (const floor of stage.floors) {
+    for (const segment of floor.segments) {
+      assert.ok(segment.x2 - segment.x1 >= 120, `床${floor.index}の足場 ${segment.x1}〜${segment.x2} が狭すぎる`);
+    }
   }
 });
 

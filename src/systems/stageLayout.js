@@ -1,4 +1,4 @@
-// ステージ（床・床の穴・障害物・獲物が入れない範囲）の形と、位置の判定。
+// ステージ（床・床の穴・障害物・獲物が入れない範囲）の形と、位置の判定。床は下から通り抜けられず、穴を通って上下に移動する。
 // Phaser に依存しないので、node --test で単体テストできる。
 
 /**
@@ -95,15 +95,32 @@ export function isClearOfObstacles(stage, floorIndex, x, halfWidth) {
   return !stage.obstacles.some((o) => o.floor === floorIndex && Math.abs(x - o.x) < o.w / 2 + halfWidth);
 }
 
+/** 床のすき間（穴と、画面の端と床の間）を左から順に返す */
+export function floorGaps(floor, fieldX1, fieldX2) {
+  const gaps = [];
+  let left = fieldX1;
+  for (const segment of floor.segments) {
+    if (segment.x1 > left) gaps.push({ x1: left, x2: segment.x1 });
+    left = Math.max(left, segment.x2);
+  }
+  if (fieldX2 > left) gaps.push({ x1: left, x2: fieldX2 });
+  return gaps;
+}
+
 /**
- * 床 lower から、その一段上の床 upper へジャンプで乗れるか。
- * 高さが届き（clearance 分の余裕つき）、足場どうしが横に minOverlap 以上重なっている所があること。
+ * 床 lower から一段上の床 upper へ登れるか。床は下から通り抜けられないので、穴を通ってジャンプする。
+ * - 高さ：ジャンプで upper の上面より clearance 以上高く上がれる
+ * - 穴：upper に「体の幅 + margin」以上のすき間があり、その真下の lower に体の幅以上の足場がある
  */
-export function canJumpUp(lower, upper, jumpHeight, { clearance = 20, minOverlap = 120 } = {}) {
+export function canJumpUp(lower, upper, { jumpHeight, bodyWidth, fieldX1, fieldX2, clearance = 20, margin = 60 }) {
   const rise = lower.y - upper.y;
-  const overlap = Math.max(
-    0,
-    ...lower.segments.flatMap((a) => upper.segments.map((b) => Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1))),
-  );
-  return rise > 0 && rise + clearance <= jumpHeight && overlap >= minOverlap;
+  if (rise <= 0 || rise + clearance > jumpHeight) return false;
+  return floorGaps(upper, fieldX1, fieldX2).some((gap) => {
+    if (gap.x2 - gap.x1 < bodyWidth + margin) return false;
+    const ground = Math.max(
+      0,
+      ...lower.segments.map((segment) => Math.min(segment.x2, gap.x2) - Math.max(segment.x1, gap.x1)),
+    );
+    return ground >= bodyWidth;
+  });
 }

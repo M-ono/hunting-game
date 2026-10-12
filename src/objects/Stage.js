@@ -14,7 +14,7 @@ export function createStageObjects(scene, stage) {
     .rectangle(field.x + field.width / 2, field.y + field.height / 2, field.width, field.height, colors.field)
     .setDepth(DEPTH.field);
 
-  // 床（鉄骨）。穴の部分は空けて、足場の切れ端ごとに置く。上からだけ乗れて、下からはすり抜けられる（ジャンプで一段上に乗れる）
+  // 床（鉄骨）。穴の部分は空けて、足場の切れ端ごとに置く。下からも横からも通り抜けられない（上の段へは穴を通る）
   const floors = scene.physics.add.staticGroup();
   const pattern = scene.add.graphics().setDepth(DEPTH.stage + 1);
   for (const floor of stage.floors) {
@@ -24,10 +24,6 @@ export function createStageObjects(scene, stage) {
         .rectangle(segment.x1 + width / 2, floor.y + floor.thickness / 2, width, floor.thickness, colors.girder)
         .setDepth(DEPTH.stage);
       floors.add(girder);
-      const check = girder.body.checkCollision;
-      check.down = false;
-      check.left = false;
-      check.right = false;
 
       // 鉄骨の模様
       const band = Math.min(floor.thickness, 36);

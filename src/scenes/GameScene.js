@@ -14,7 +14,7 @@ import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
 import { keepCameraCentered } from '../utils/camera.js';
 
-/** 本編：移動・ジャンプ（下の段へは床の穴から）・攻撃・捕獲・檻・反撃・料理・制限時間 */
+/** 本編：移動・ジャンプ（床の穴を通って上下の段へ）・攻撃・捕獲・檻・反撃・料理・制限時間 */
 export class GameScene extends Phaser.Scene {
   constructor() {
     super(SCENES.game);
@@ -60,7 +60,7 @@ export class GameScene extends Phaser.Scene {
       this.preys.push(prey);
     }
 
-    // 床は上面だけに当たり判定があるので、下からジャンプですり抜けて一段上に乗れる
+    // 床はどの面も固い。上の段へは穴をジャンプで通り抜け、下の段へは穴から飛び降りる
     this.physics.add.collider(this.player, floors);
     this.physics.add.collider(this.player, obstacles);
     this.physics.add.collider(this.preys, floors);

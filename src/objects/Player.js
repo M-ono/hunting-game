@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH, TEXTURES } from '../constants.js';
-/** プレイヤー。左右移動・ジャンプ（一段上の床まで届く）・無敵時間・持っている獲物の管理。下の段へは床の穴から飛び降りる */
+/** プレイヤー。左右移動・ジャンプ（床の穴を通って一段上へ）・無敵時間・持っている獲物の管理。下の段へは床の穴から飛び降りる */
 export class Player extends Phaser.Physics.Arcade.Sprite {
   /**
    * @param {Phaser.Scene} scene
@@ -47,8 +47,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.body.bottom;
   }
 
+  /** 床や岩の上に立っているか。獲物との重なり（touching）は数えない（空中で獲物に触れてもジャンプできないように） */
   get onGround() {
-    return this.body.blocked.down || this.body.touching.down;
+    return this.body.blocked.down;
   }
 
   /**
@@ -70,7 +71,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setVelocityX(dir * runSpeed);
     if (dir !== 0) this.setFlipX(dir < 0);
 
-    // ジャンプ：一段上の床まで届く（床は下からすり抜ける）。着地直前の入力と、床から落ちた直後の入力も受け付ける
+    // ジャンプ：穴を通り抜ければ一段上の床に乗れる高さ。着地直前の入力と、床から落ちた直後の入力も受け付ける
     const jumpWanted = now - this.jumpRequestedAt <= this.cfg.jumpBufferMs;
     const canJump = now - this.lastGroundedAt <= this.cfg.coyoteMs;
     if (jumpWanted && canJump) {
