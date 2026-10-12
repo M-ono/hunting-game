@@ -1,9 +1,7 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH, TEXTURES } from '../constants.js';
-import { ladderToClimbDown, ladderToClimbUp } from '../systems/stageLayout.js';
-
-/** プレイヤー。左右移動・ジャンプ・はしご・無敵時間・持っている獲物の管理 */
+/** プレイヤー。左右移動・ジャンプ（一段上の床まで届く）・無敵時間・持っている獲物の管理。下の段へは床の穴から飛び降りる */
 export class Player extends Phaser.Physics.Arcade.Sprite {
   /**
    * @param {Phaser.Scene} scene
@@ -16,15 +14,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     this.cfg = CONFIG.player;
+    // ジャンプの高さから、跳び上がる勢いを計算する（高さ = 勢い² ÷ (2 × 重力)）
+    this.jumpSpeed = Math.sqrt(2 * CONFIG.physics.gravity * this.cfg.jumpHeight);
     this.body.setSize(this.cfg.width, this.cfg.height);
-    this.body.setMaxVelocityY(CONFIG.physics.maxFallSpeed);
     this.setCollideWorldBounds(true);
     this.setDepth(DEPTH.player);
 
-    /** つかまっているはしご（なければ null） */
-    this.climbing = null;
     this.lastGroundedAt = -Infinity;
     this.jumpRequestedAt = -Infinity;
+    /** 最後に立っていた床の高さ（ジャンプ中も「どの段にいるか」の判定に使う） */
+    this.groundY = feetY;
 
     /** 持っている獲物 @type {import('./Prey.js').Prey[]} */
     this.carried = [];
@@ -55,72 +54,33 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   /**
    * 入力に合わせて動かす。毎フレーム呼ぶ。
    * @param {number} now ゲーム内時刻
-   * @param {{ x: number, y: number, jump: boolean }} input スティック（-1〜1）とジャンプ入力
-   * @param {{ run: number, climb: number }} speeds 今の移動速度
-   * @param {ReturnType<import('../systems/stageLayout.js').buildStage>} stage
+   * @param {{ x: number, jump: boolean }} input スティックの横方向（-1〜1）とジャンプ入力
+   * @param {number} runSpeed 今の左右の速さ
    */
-  updateMovement(now, input, speeds, stage) {
-    const { moveThreshold, climbThreshold } = CONFIG.controls;
-    const grab = CONFIG.ladder.grabDistance;
-    if (this.onGround) this.lastGroundedAt = now;
+  updateMovement(now, input, runSpeed) {
+    const grounded = this.onGround;
+    if (grounded) {
+      this.lastGroundedAt = now;
+      this.groundY = this.feetY;
+    }
     if (input.jump) this.jumpRequestedAt = now;
 
-    if (this.climbing) {
-      this.updateClimbing(input, speeds.climb);
-      return;
-    }
-
-    // はしごにつかまる（上に倒すと登る、上端で下に倒すと降りる）
-    if (input.y <= -climbThreshold) {
-      const ladder = ladderToClimbUp(stage, this.x, this.feetY, grab);
-      if (ladder) return this.startClimbing(ladder);
-    } else if (input.y >= climbThreshold && this.onGround) {
-      const ladder = ladderToClimbDown(stage, this.x, this.feetY, grab);
-      if (ladder) return this.startClimbing(ladder);
-    }
-
     // 左右（スティックを少し倒すだけで最高速）
-    const dir = Math.abs(input.x) >= moveThreshold ? Math.sign(input.x) : 0;
-    this.setVelocityX(dir * speeds.run);
+    const dir = Math.abs(input.x) >= CONFIG.controls.moveThreshold ? Math.sign(input.x) : 0;
+    this.setVelocityX(dir * runSpeed);
     if (dir !== 0) this.setFlipX(dir < 0);
 
-    // ジャンプ（着地直前の入力と、床から落ちた直後の入力も受け付ける）
+    // ジャンプ：一段上の床まで届く（床は下からすり抜ける）。着地直前の入力と、床から落ちた直後の入力も受け付ける
     const jumpWanted = now - this.jumpRequestedAt <= this.cfg.jumpBufferMs;
     const canJump = now - this.lastGroundedAt <= this.cfg.coyoteMs;
     if (jumpWanted && canJump) {
-      this.setVelocityY(-this.cfg.jumpSpeed);
+      this.setVelocityY(-this.jumpSpeed);
       this.jumpRequestedAt = -Infinity;
       this.lastGroundedAt = -Infinity;
     }
-  }
 
-  // 位置を直接合わせるときは body.reset を使う（x, y の代入だと、そのフレームの移動量があとから足されてずれる）
-
-  startClimbing(ladder) {
-    this.climbing = ladder;
-    this.jumpRequestedAt = -Infinity;
-    this.body.setAllowGravity(false);
-    this.body.reset(ladder.x, this.y);
-  }
-
-  updateClimbing(input, speed) {
-    const ladder = this.climbing;
-    const { climbThreshold } = CONFIG.controls;
-    let vy = 0;
-    if (input.y <= -climbThreshold) vy = -speed;
-    else if (input.y >= climbThreshold) vy = speed;
-    if (this.x !== ladder.x) this.body.reset(ladder.x, this.y);
-    this.setVelocity(0, vy);
-
-    // 上端・下端に着いたら床に降り立つ
-    if (vy < 0 && this.feetY <= ladder.topY) this.stopClimbing(ladder.topY);
-    else if (vy > 0 && this.feetY >= ladder.bottomY) this.stopClimbing(ladder.bottomY);
-  }
-
-  stopClimbing(feetY) {
-    this.climbing = null;
-    this.body.setAllowGravity(true);
-    this.body.reset(this.x, feetY - this.cfg.height / 2);
+    // 落ちる速さの上限（上向きの勢いは制限しない）
+    if (this.body.velocity.y > CONFIG.physics.maxFallSpeed) this.setVelocityY(CONFIG.physics.maxFallSpeed);
   }
 
   isInvincible(now) {

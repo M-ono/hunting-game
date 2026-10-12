@@ -22,8 +22,8 @@ export class TitleScene extends Phaser.Scene {
     const howTo = [
       '画面のどこでもドラッグ … スティック',
       '　左右に倒す … 移動',
-      '　上に倒す … ジャンプ（はしごでは登る）',
-      '　下に倒す … はしごを降りる',
+      '　上にはじく … ジャンプ（一段上の床に届く）',
+      '床の穴から飛び降りる … 下の段へ',
       'タップ … まわりを攻撃',
       `${CONFIG.prey.maxHp}回当てると獲物が気絶 → ふれて捕まえる`,
       '一番上の檻にふれる … 獲物を入れる（スコア）',
@@ -33,7 +33,7 @@ export class TitleScene extends Phaser.Scene {
       '攻撃されると、持っている獲物が逃げる',
     ];
     addText(this, cx, 960, howTo.join('\n'), { size: 38, bold: false, stroke: 6 }).setLineSpacing(14);
-    addText(this, cx, 1330, 'PC：←→ 移動　↑ ジャンプ・登る　↓ 降りる　Z 攻撃', { size: 30, bold: false, stroke: 6 });
+    addText(this, cx, 1330, 'PC：←→ 移動　↑ ジャンプ　Z 攻撃', { size: 30, bold: false, stroke: 6 });
 
     addText(this, cx, 1450, `制限時間 ${CONFIG.round.timeLimitSec}秒　ベスト ${loadBestScore()}`, { size: 46 });
 

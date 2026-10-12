@@ -9,12 +9,12 @@ import { Prey } from '../objects/Prey.js';
 import { createStageObjects } from '../objects/Stage.js';
 import { checkCooking, describeEffect, rollCookingEffect } from '../systems/cooking.js';
 import { EFFECT_CAPACITY, EFFECT_SPEED, PlayerStats } from '../systems/PlayerStats.js';
-import { buildStage, isClearOfObstacles, noPreyZoneAt } from '../systems/stageLayout.js';
+import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt } from '../systems/stageLayout.js';
 import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
 import { keepCameraCentered } from '../utils/camera.js';
 
-/** 本編：移動・ジャンプ・はしご・攻撃・捕獲・檻・反撃・料理・制限時間 */
+/** 本編：移動・ジャンプ（下の段へは床の穴から）・攻撃・捕獲・檻・反撃・料理・制限時間 */
 export class GameScene extends Phaser.Scene {
   constructor() {
     super(SCENES.game);
@@ -41,7 +41,7 @@ export class GameScene extends Phaser.Scene {
       minSpeedRate: CONFIG.carry.minSpeedRate,
     });
 
-    // ステージ（床・はしご・障害物）と、一番上の床の檻・焚き火
+    // ステージ（穴のある床・障害物）と、一番上の床の檻・焚き火
     const { field } = CONFIG;
     this.physics.world.setBounds(field.x, field.y, field.width, field.height);
     this.layout = buildStage(CONFIG);
@@ -60,10 +60,9 @@ export class GameScene extends Phaser.Scene {
       this.preys.push(prey);
     }
 
-    // はしごにつかまっている間は、床や岩をすり抜ける
-    const notClimbing = () => !this.player.climbing;
-    this.physics.add.collider(this.player, floors, undefined, notClimbing);
-    this.physics.add.collider(this.player, obstacles, undefined, notClimbing);
+    // 床は上面だけに当たり判定があるので、下からジャンプですり抜けて一段上に乗れる
+    this.physics.add.collider(this.player, floors);
+    this.physics.add.collider(this.player, obstacles);
     this.physics.add.collider(this.preys, floors);
     this.physics.add.collider(this.preys, obstacles);
     this.physics.add.collider(this.preys, preyFences);
@@ -95,16 +94,11 @@ export class GameScene extends Phaser.Scene {
       floatText(this, this.player.x, this.player.y - 130, '料理の効果が切れた', { size: 38 });
     }
 
-    // 移動（持っている数が多いほど、左右もはしごも遅い）
+    // 移動（持っている数が多いほど遅い。ジャンプの高さは変わらない）
     const input = this.controls.read();
     const carried = this.player.carried.length;
     const speedRate = this.stats.speedRate * this.stats.carryRate(carried);
-    this.player.updateMovement(
-      now,
-      input,
-      { run: CONFIG.player.runSpeed * speedRate, climb: CONFIG.player.climbSpeed * speedRate },
-      this.layout,
-    );
+    this.player.updateMovement(now, input, CONFIG.player.runSpeed * speedRate);
 
     // 攻撃
     const wantsAttack = input.attack || (CONFIG.controls.autoAttack && this.hasPreyInAttackRange());
@@ -126,7 +120,7 @@ export class GameScene extends Phaser.Scene {
 
   // ---- 獲物の出現 ----
 
-  /** 獲物が出てもよい床の、障害物・檻・焚き火から離れ、プレイヤーからも離れた場所を探す */
+  /** 獲物が出てもよい床の、穴・障害物・檻・焚き火から離れ、プレイヤーからも離れた場所を探す */
   findSpawnPoint() {
     const { spawnFloors, width, spawnMinDistance } = CONFIG.prey;
     const half = width / 2;
@@ -136,6 +130,8 @@ export class GameScene extends Phaser.Scene {
       const x = Phaser.Math.Between(floor.x1 + half + 10, floor.x2 - half - 10);
       point = { x, feetY: floor.y };
       const ok =
+        floorAt(this.layout, x - half - 10, floor.y) &&
+        floorAt(this.layout, x + half + 10, floor.y) &&
         isClearOfObstacles(this.layout, floor.index, x, half + 10) &&
         !noPreyZoneAt(this.layout, x, floor.y) &&
         Phaser.Math.Distance.Between(x, floor.y, this.player.x, this.player.feetY) >= spawnMinDistance;

@@ -146,7 +146,8 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     }
 
     const dx = player.x - this.x;
-    const sameLevel = !player.climbing && onSameLevel(player.feetY, this.feetY);
+    // プレイヤーがジャンプ中でも、最後に立っていた床で同じ段かどうかを決める
+    const sameLevel = onSameLevel(player.groundY, this.feetY);
     switch (this.state) {
       case PREY_STATE.FLEE:
         if (now >= this.stateUntil) this.toWander(now);

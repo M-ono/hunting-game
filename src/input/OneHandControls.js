@@ -6,10 +6,9 @@ import { DEPTH } from '../constants.js';
  * 片手操作
  * - 画面のどこでもドラッグ：指を置いた位置に仮想スティックが出る
  *   - 左右に倒す：移動
- *   - 上に倒す（はじく）：ジャンプ。はしごの前では登る
- *   - 下に倒す：はしごを降りる
+ *   - 上にはじく：ジャンプ（一段上の床まで届く）。下の段へは床の穴から飛び降りる
  * - 短くタップ：攻撃
- * - PC：←→/AD で移動、↑/W/Space でジャンプ（はしごは↑で登る）、↓/S で降りる、Z/J で攻撃
+ * - PC：←→/AD で移動、↑/W/Space でジャンプ、Z/J で攻撃
  */
 export class OneHandControls {
   /** @param {Phaser.Scene} scene */
@@ -25,7 +24,7 @@ export class OneHandControls {
     this.upLatched = false; // 上に倒したままか（倒しっぱなしで連続ジャンプしないように）
     this.jumpQueued = false;
     this.attackQueued = false;
-    this.input = { x: 0, y: 0, jump: false, attack: false };
+    this.input = { x: 0, jump: false, attack: false };
 
     // スティックの見た目。カメラの位置に関係なく指の位置に出すため scrollFactor 0
     const radius = this.cfg.joystickRadius;
@@ -47,7 +46,7 @@ export class OneHandControls {
     scene.input.on('pointerupoutside', this.onPointerUp, this);
 
     if (scene.input.keyboard) {
-      this.keys = scene.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Z,J');
+      this.keys = scene.input.keyboard.addKeys('W,A,D,UP,LEFT,RIGHT,SPACE,Z,J');
     }
 
     // タブ切り替えなどで指の状態が分からなくなったら離したことにする
@@ -57,12 +56,11 @@ export class OneHandControls {
 
   /**
    * 今フレームの入力。ジャンプと攻撃は1回読んだら消える。
-   * @returns {{ x: number, y: number, jump: boolean, attack: boolean }} x, y はスティックの向き（-1〜1）
+   * @returns {{ x: number, jump: boolean, attack: boolean }} x はスティックの横方向（-1〜1）
    */
   read() {
     const input = this.input;
     input.x = this.stick.x;
-    input.y = this.stick.y;
     input.jump = this.jumpQueued;
     input.attack = this.attackQueued;
     this.jumpQueued = false;
@@ -72,16 +70,13 @@ export class OneHandControls {
       const k = this.keys;
       const JustDown = Phaser.Input.Keyboard.JustDown;
       const x = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
-      const y = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
       if (x !== 0) input.x = x;
-      if (y !== 0) input.y = y;
       if (JustDown(k.UP) || JustDown(k.W) || JustDown(k.SPACE)) input.jump = true;
       if (JustDown(k.Z) || JustDown(k.J)) input.attack = true;
     }
 
     if (!this.enabled) {
       input.x = 0;
-      input.y = 0;
       input.jump = false;
       input.attack = false;
     }

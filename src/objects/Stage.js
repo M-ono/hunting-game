@@ -2,7 +2,7 @@ import { CONFIG } from '../config.js';
 import { DEPTH } from '../constants.js';
 
 /**
- * 床（鉄骨）・はしご・障害物を描き、当たり判定を作る。
+ * 床（鉄骨。穴は空ける）・障害物を描き、当たり判定を作る。
  * @param {Phaser.Scene} scene
  * @param {ReturnType<import('../systems/stageLayout.js').buildStage>} stage
  * @returns {{ floors: Phaser.Physics.Arcade.StaticGroup, obstacles: Phaser.Physics.Arcade.StaticGroup, preyFences: Phaser.Physics.Arcade.StaticGroup }}
@@ -14,40 +14,29 @@ export function createStageObjects(scene, stage) {
     .rectangle(field.x + field.width / 2, field.y + field.height / 2, field.width, field.height, colors.field)
     .setDepth(DEPTH.field);
 
-  // はしご（床の後ろに描く）
-  const half = CONFIG.ladder.width / 2;
-  const ladders = scene.add.graphics().setDepth(DEPTH.stage - 2);
-  for (const ladder of stage.ladders) {
-    ladders.lineStyle(8, colors.ladder, 1);
-    ladders.lineBetween(ladder.x - half, ladder.topY, ladder.x - half, ladder.bottomY);
-    ladders.lineBetween(ladder.x + half, ladder.topY, ladder.x + half, ladder.bottomY);
-    ladders.lineStyle(6, colors.ladder, 1);
-    for (let y = ladder.bottomY - 28; y > ladder.topY; y -= 40) {
-      ladders.lineBetween(ladder.x - half, y, ladder.x + half, y);
-    }
-  }
-
-  // 床（鉄骨）。上からだけ乗れて、下からはすり抜けられる
+  // 床（鉄骨）。穴の部分は空けて、足場の切れ端ごとに置く。上からだけ乗れて、下からはすり抜けられる（ジャンプで一段上に乗れる）
   const floors = scene.physics.add.staticGroup();
   const pattern = scene.add.graphics().setDepth(DEPTH.stage + 1);
   for (const floor of stage.floors) {
-    const width = floor.x2 - floor.x1;
-    const girder = scene.add
-      .rectangle(floor.x1 + width / 2, floor.y + floor.thickness / 2, width, floor.thickness, colors.girder)
-      .setDepth(DEPTH.stage);
-    floors.add(girder);
-    const check = girder.body.checkCollision;
-    check.down = false;
-    check.left = false;
-    check.right = false;
+    for (const segment of floor.segments) {
+      const width = segment.x2 - segment.x1;
+      const girder = scene.add
+        .rectangle(segment.x1 + width / 2, floor.y + floor.thickness / 2, width, floor.thickness, colors.girder)
+        .setDepth(DEPTH.stage);
+      floors.add(girder);
+      const check = girder.body.checkCollision;
+      check.down = false;
+      check.left = false;
+      check.right = false;
 
-    // 鉄骨の模様
-    const band = Math.min(floor.thickness, 36);
-    pattern.lineStyle(4, colors.girderEdge, 1);
-    pattern.strokeRect(floor.x1, floor.y, width, band);
-    for (let x = floor.x1; x + 36 <= floor.x2; x += 36) {
-      pattern.lineBetween(x, floor.y + band, x + 18, floor.y);
-      pattern.lineBetween(x + 18, floor.y, x + 36, floor.y + band);
+      // 鉄骨の模様
+      const band = Math.min(floor.thickness, 36);
+      pattern.lineStyle(4, colors.girderEdge, 1);
+      pattern.strokeRect(segment.x1, floor.y, width, band);
+      for (let x = segment.x1; x + 36 <= segment.x2; x += 36) {
+        pattern.lineBetween(x, floor.y + band, x + 18, floor.y);
+        pattern.lineBetween(x + 18, floor.y, x + 36, floor.y + band);
+      }
     }
   }
 
