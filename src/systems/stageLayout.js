@@ -49,25 +49,17 @@ export function buildStage(config) {
     w: obstacle.w,
     h: obstacle.h,
   }));
-  // 獲物が入れない範囲（檻と焚き火のまわり）。y2 は床の上面より少し下まで
+  // 獲物が入れない範囲（ギルドと食堂のまわり）。y2 は床の上面より少し下まで
   const margin = config.prey.keepOutMargin;
-  const { cage, campfire } = config;
-  const cageFloorY = floors[cage.floor].y;
-  const fireFloorY = floors[campfire.floor].y;
-  const noPreyZones = [
-    {
-      x1: cage.x - cage.width / 2 - margin,
-      x2: cage.x + cage.width / 2 + margin,
-      y1: cageFloorY - cage.height - margin,
-      y2: cageFloorY + 10,
-    },
-    {
-      x1: campfire.x - campfire.radius - margin,
-      x2: campfire.x + campfire.radius + margin,
-      y1: fireFloorY - campfire.radius * 2 - margin,
-      y2: fireFloorY + 10,
-    },
-  ];
+  const noPreyZones = [config.guild, config.diner].map((building) => {
+    const floorY = floors[building.floor].y;
+    return {
+      x1: building.x - building.width / 2 - margin,
+      x2: building.x + building.width / 2 + margin,
+      y1: floorY - building.height - margin,
+      y2: floorY + 10,
+    };
+  });
   return { floors, obstacles, noPreyZones };
 }
 

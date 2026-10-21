@@ -19,8 +19,8 @@ const mini = buildStage({
   field: { x: 0, width: 1000 },
   floorThickness: 30,
   prey: { keepOutMargin: 100 },
-  cage: { floor: 1, x: 100, width: 100, height: 80 },
-  campfire: { floor: 1, x: 700, radius: 40 },
+  guild: { floor: 1, x: 100, width: 100, height: 80 },
+  diner: { floor: 1, x: 700, width: 80, height: 80 },
   floors: [
     { y: 1000 }, // 端から端まで
     { y: 700, x2: 800, holes: [{ x: 400, width: 100 }] },
@@ -88,11 +88,12 @@ test('一段上に登れるか（床は下から通れないので、穴を通�
   assert.equal(canJumpUp(noGround, holeOnly, { ...base, jumpHeight: 350, margin: 20 }), false);
 });
 
-test('檻と焚き火のまわりは獲物が入れない', () => {
-  assert.ok(noPreyZoneAt(mini, 100, 700)); // 檻の真下の床
-  assert.ok(noPreyZoneAt(mini, 240, 700)); // 檻の端から90px
-  assert.equal(noPreyZoneAt(mini, 300, 700), null); // 檻の端から150px
-  assert.ok(noPreyZoneAt(mini, 700, 700)); // 焚き火
+test('ギルドと食堂のまわりは獲物が入れない', () => {
+  assert.ok(noPreyZoneAt(mini, 100, 700)); // ギルドの真下の床
+  assert.ok(noPreyZoneAt(mini, 240, 700)); // ギルドの端から90px
+  assert.equal(noPreyZoneAt(mini, 300, 700), null); // ギルドの端から150px
+  assert.ok(noPreyZoneAt(mini, 700, 700)); // 食堂
+  assert.ok(noPreyZoneAt(mini, 830, 700)); // 食堂の端から90px
   assert.equal(noPreyZoneAt(mini, 100, 1000), null); // 下の段は関係ない
 });
 
@@ -110,7 +111,8 @@ test('設定のステージ：どの床からも、穴を通って一段上の�
       `床${floors[i].index} → 床${floors[i + 1].index} に登れない（間隔 ${floors[i].y - floors[i + 1].y}px、ジャンプ ${CONFIG.player.jumpHeight}px、穴の幅を確認）`,
     );
   }
-  assert.equal(floors.at(-1).index, CONFIG.cage.floor, '檻は一番上の床にある');
+  assert.equal(floors.at(-1).index, CONFIG.guild.floor, 'ギルドは一番上の床にある');
+  assert.equal(floors.at(-1).index, CONFIG.diner.floor, '食堂は一番上の床にある');
 });
 
 test('設定のステージ：地面以外のどの床にも、飛び降りられる穴がある', () => {
@@ -151,35 +153,54 @@ test('設定のステージ：穴のふちの足場が狭すぎない（獲物�
   }
 });
 
-test('設定のステージ：出発地点は一番上の床の檻のそば（穴の上ではない）', () => {
+test('設定のステージ：出発地点は一番上の床のギルドのそば（穴の上ではない）', () => {
   const { startFloor, startX, width } = CONFIG.player;
-  assert.equal(startFloor, CONFIG.cage.floor, '檻と同じ床から出発する');
+  assert.equal(startFloor, CONFIG.guild.floor, 'ギルドと同じ床から出発する');
   const floor = stage.floors[startFloor];
   assert.ok(floorAt(stage, startX - width / 2, floor.y) && floorAt(stage, startX + width / 2, floor.y), '出発地点が穴にかかっている');
-  assert.ok(Math.abs(startX - CONFIG.cage.x) <= 250, '出発地点が檻から離れすぎている');
+  assert.ok(Math.abs(startX - CONFIG.guild.x) <= 250, '出発地点がギルドから離れすぎている');
 });
 
-test('設定のステージ：檻と焚き火は穴の上に置かれていない', () => {
-  const top = stage.floors[CONFIG.cage.floor];
+test('設定のステージ：ギルドと食堂は穴の上に置かれていない', () => {
+  const top = stage.floors[CONFIG.guild.floor];
   const onFloor = (x1, x2) => top.segments.some((segment) => x1 >= segment.x1 && x2 <= segment.x2);
-  const { cage, campfire } = CONFIG;
-  assert.ok(onFloor(cage.x - cage.width / 2, cage.x + cage.width / 2), '檻が穴にかかっている');
-  assert.ok(onFloor(campfire.x - campfire.radius, campfire.x + campfire.radius), '焚き火が穴にかかっている');
+  for (const [name, building] of [['ギルド', CONFIG.guild], ['食堂', CONFIG.diner]]) {
+    assert.ok(onFloor(building.x - building.width / 2, building.x + building.width / 2), `${name}が穴にかかっている`);
+  }
+});
+
+test('設定の獲物：深い段ほど高く売れて、体も大きい', () => {
+  const byDepth = [...CONFIG.prey.types].sort((a, b) => b.floor - a.floor); // 上の段から順
+  for (let i = 1; i < byDepth.length; i++) {
+    const [upper, lower] = [byDepth[i - 1], byDepth[i]];
+    assert.ok(lower.floor < upper.floor, `床${lower.floor}に2種類の獲物がいる`);
+    assert.ok(lower.price > upper.price, `床${lower.floor}の獲物が床${upper.floor}の獲物より高くない`);
+    assert.ok(lower.width > upper.width && lower.height > upper.height, `床${lower.floor}の獲物が床${upper.floor}の獲物より大きくない`);
+  }
+  assert.equal(new Set(CONFIG.prey.types.map((type) => type.color)).size, CONFIG.prey.types.length, '同じ色の獲物がいる');
+});
+
+test('設定の獲物：ギルドのある一番上の床には出ない', () => {
+  for (const type of CONFIG.prey.types) {
+    assert.ok(stage.floors[type.floor], `床${type.floor}がない`);
+    assert.notEqual(type.floor, CONFIG.guild.floor, '一番上の床に獲物が出る');
+  }
 });
 
 test('設定のステージ：獲物が出る床のどこかに、入れない範囲の外がある', () => {
-  for (const floorIndex of CONFIG.prey.spawnFloors) {
-    const floor = stage.floors[floorIndex];
+  for (const type of CONFIG.prey.types) {
+    const floor = stage.floors[type.floor];
     let free = 0;
     for (let x = floor.x1 + 40; x <= floor.x2 - 40; x += 20) {
       if (
-        floorAt(stage, x, floor.y) &&
+        floorAt(stage, x - type.width / 2, floor.y) &&
+        floorAt(stage, x + type.width / 2, floor.y) &&
         !noPreyZoneAt(stage, x, floor.y) &&
-        isClearOfObstacles(stage, floorIndex, x, CONFIG.prey.width / 2)
+        isClearOfObstacles(stage, type.floor, x, type.width / 2)
       ) {
         free++;
       }
     }
-    assert.ok(free > 5, `床${floorIndex}に獲物の出られる場所がない`);
+    assert.ok(free > 5, `床${type.floor}に獲物（${type.price}）の出られる場所がない`);
   }
 });

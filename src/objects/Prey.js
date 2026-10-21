@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
-import { DEPTH, TEXTURES } from '../constants.js';
+import { DEPTH, preyTextureKey } from '../constants.js';
 import { floorAt, noPreyZoneAt, onSameLevel } from '../systems/stageLayout.js';
 import { addText } from '../ui/text.js';
 
@@ -10,23 +10,23 @@ export const PREY_STATE = Object.freeze({
   AGGRO: 'aggro', // プレイヤーに向かってくる（プレイヤーが獲物を持っていて、同じ段にいるとき）
   STUNNED: 'stunned', // 気絶（動かない。触れると捕まえられる）
   CARRIED: 'carried', // プレイヤーが持っている
-  CAGED: 'caged', // 檻の中（補充されるまで出てこない）
+  DELIVERED: 'delivered', // ギルドに届けた（補充されるまで出てこない）
 });
 
-/** 獲物。状態ごとの動き（AI）と見た目を持つ */
+/** 獲物。状態ごとの動き（AI）と見た目を持つ。種類（値段・色・大きさ）は出てくるたびに決まる */
 export class Prey extends Phaser.Physics.Arcade.Sprite {
   /**
    * @param {Phaser.Scene} scene
    * @param {ReturnType<import('../systems/stageLayout.js').buildStage>} stage
    */
   constructor(scene, stage) {
-    super(scene, 0, 0, TEXTURES.prey);
+    super(scene, 0, 0, preyTextureKey(0));
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
     this.cfg = CONFIG.prey;
     this.stage = stage;
-    this.body.setSize(this.cfg.width, this.cfg.height);
+    this.setType(0);
     this.body.setMaxVelocityY(CONFIG.physics.maxFallSpeed);
     this.setCollideWorldBounds(true);
     this.setDepth(DEPTH.prey);
@@ -43,8 +43,17 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     this.marker = addText(scene, 0, 0, '', { size: 52 }).setDepth(DEPTH.prey + 1).setVisible(false);
     this.overlay = scene.add.graphics().setDepth(DEPTH.prey + 1);
 
-    this.setState(PREY_STATE.CAGED);
+    this.setState(PREY_STATE.DELIVERED);
     this.disableBody(true, true);
+  }
+
+  /** 種類を決める（CONFIG.prey.types の番号）。見た目と当たり判定の大きさが変わる */
+  setType(typeIndex) {
+    this.typeIndex = typeIndex;
+    /** @type {(typeof CONFIG.prey.types)[number]} */
+    this.type = this.cfg.types[typeIndex];
+    this.setTexture(preyTextureKey(typeIndex));
+    this.body.setSize(this.type.width, this.type.height);
   }
 
   get feetY() {
@@ -64,9 +73,10 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     return this.state === PREY_STATE.WANDER || this.state === PREY_STATE.FLEE || this.state === PREY_STATE.AGGRO;
   }
 
-  /** ステージに出す（最初の配置・補充） */
-  spawn(x, feetY, now) {
-    this.enableBody(true, x, feetY - this.cfg.height / 2, true, true);
+  /** 種類を決めてステージに出す（最初の配置・補充） */
+  spawn(x, feetY, now, typeIndex) {
+    this.setType(typeIndex);
+    this.enableBody(true, x, feetY - this.type.height / 2, true, true);
     this.hp = this.cfg.maxHp;
     this.attackReadyAt = now;
     this.dir = Math.random() < 0.5 ? -1 : 1;
@@ -104,9 +114,9 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     this.startFlee(now, dir, this.cfg.escapeSpeed, -this.cfg.escapeJump, CONFIG.attack.knockbackMs * 2);
   }
 
-  /** 檻に入れられた */
-  cage() {
-    this.setState(PREY_STATE.CAGED);
+  /** ギルドに届けられた */
+  deliver() {
+    this.setState(PREY_STATE.DELIVERED);
     this.disableBody(true, true);
     this.hideOverlay();
   }
@@ -136,7 +146,7 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     // 空中（飛ばされている・落ちている）や、飛ばされている間は操作しない
     if (!this.body.blocked.down || now < this.burstUntil) return;
 
-    // 檻・焚き火のまわりに入ってしまったら、近いほうの端から出ていく
+    // ギルド・食堂のまわりに入ってしまったら、近いほうの端から出ていく
     const zone = noPreyZoneAt(this.stage, this.x, this.feetY);
     if (zone) {
       const out = this.x - zone.x1 < zone.x2 - this.x ? -1 : 1;
@@ -171,7 +181,8 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
 
   /** マーク・体力・気絶の残り時間の表示を位置に合わせて描く（物理演算で位置が決まったあとに呼ぶ） */
   syncOverlay(now) {
-    const top = -this.cfg.height / 2;
+    const { width, height } = this.type;
+    const top = -height / 2;
     this.marker.setPosition(this.x, this.y + top - 36);
     const g = this.overlay.clear().setPosition(this.x, this.y);
 
@@ -180,8 +191,11 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
       const left = Phaser.Math.Clamp((this.stateUntil - now) / this.cfg.stunMs, 0, 1);
       g.lineStyle(8, 0xffe066, 0.9);
       g.beginPath();
-      g.arc(0, 0, this.cfg.width / 2 + 14, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+      g.arc(0, 0, width / 2 + 14, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
       g.strokePath();
+    } else if (this.isAggro) {
+      // 襲ってくる獲物は赤い輪で囲む（体の色は値段を表すので変えない）
+      g.lineStyle(6, CONFIG.colors.preyAggro, 0.9).strokeEllipse(0, 0, width + 20, height + 20);
     } else if (this.hp < this.cfg.maxHp) {
       // 体力を点で表示
       const gap = 18;
@@ -239,11 +253,11 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
   }
 
   /**
-   * 床の上を歩く。床の端・壁・檻と焚き火のまわりの手前では止まる（turnAround が true なら引き返す）。
+   * 床の上を歩く。床の端・壁・ギルドと食堂のまわりの手前では止まる（turnAround が true なら引き返す）。
    */
   walk(dir, speed, turnAround) {
     const blocked = dir < 0 ? this.body.blocked.left : this.body.blocked.right;
-    const aheadX = this.x + dir * (this.cfg.width / 2 + 6);
+    const aheadX = this.x + dir * (this.type.width / 2 + 6);
     const edgeAhead = !floorAt(this.stage, aheadX, this.feetY) || noPreyZoneAt(this.stage, aheadX, this.feetY);
     if (blocked || edgeAhead) {
       if (turnAround) {
@@ -258,14 +272,13 @@ export class Prey extends Phaser.Physics.Arcade.Sprite {
     this.setVelocityX(dir * speed);
   }
 
-  /** 状態に合わせた色とマーク */
+  /** 状態に合わせたマーク。体の色は値段を表すので、状態では変えない（気絶はひっくり返す） */
   refreshLook() {
     this.clearTint();
+    this.setFlipY(this.state === PREY_STATE.STUNNED);
     if (this.state === PREY_STATE.AGGRO) {
-      this.setTint(CONFIG.colors.preyAggroTint);
       this.marker.setText('!').setColor('#ff5555').setVisible(true);
     } else if (this.state === PREY_STATE.STUNNED) {
-      this.setTint(CONFIG.colors.preyStunTint);
       this.marker.setText('★').setColor('#ffe066').setVisible(true);
     } else {
       this.marker.setVisible(false);

@@ -46,7 +46,7 @@ export function createStageObjects(scene, stage) {
     obstacles.add(rock);
   }
 
-  // 檻・焚き火のまわりの見えない柵。獲物だけがぶつかる（処理落ちしても獲物が入り込まないように）
+  // ギルド・食堂のまわりの見えない柵。獲物だけがぶつかる（処理落ちしても獲物が入り込まないように）
   const preyFences = scene.physics.add.staticGroup();
   for (const zone of stage.noPreyZones) {
     const bottom = zone.y2 - 10; // 床の上面

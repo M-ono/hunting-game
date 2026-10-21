@@ -2,19 +2,21 @@ import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH, SCENES } from '../constants.js';
 import { OneHandControls } from '../input/OneHandControls.js';
-import { Cage } from '../objects/Cage.js';
-import { Campfire } from '../objects/Campfire.js';
+import { Diner } from '../objects/Diner.js';
+import { Guild } from '../objects/Guild.js';
 import { Player } from '../objects/Player.js';
 import { Prey } from '../objects/Prey.js';
 import { createStageObjects } from '../objects/Stage.js';
-import { checkCooking, describeEffect, rollCookingEffect } from '../systems/cooking.js';
+import { checkMeal, describeEffect, rollMealEffect } from '../systems/meal.js';
 import { EFFECT_CAPACITY, PlayerStats } from '../systems/PlayerStats.js';
 import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt } from '../systems/stageLayout.js';
+import { Wallet } from '../systems/Wallet.js';
 import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
 import { keepCameraCentered } from '../utils/camera.js';
+import { formatMoney, formatMoneyChange } from '../utils/format.js';
 
-/** 本編：移動・ジャンプ（床の穴を通って上下の段へ）・攻撃・捕獲・檻・反撃・料理・制限時間 */
+/** 本編：移動・ジャンプ（床の穴を通って上下の段へ）・攻撃・捕獲・ギルドで売る・反撃・食堂・制限時間 */
 export class GameScene extends Phaser.Scene {
   constructor() {
     super(SCENES.game);
@@ -25,15 +27,15 @@ export class GameScene extends Phaser.Scene {
     this.physics.resume();
 
     this.now = 0; // ゲーム内時刻（ms）。タブを切り替えている間は進まない
-    this.score = 0; // 檻の獲物の数
-    this.cookCount = 0;
+    this.wallet = new Wallet(); // 所持金（獲物を売ると増え、食堂で使うと減る）
+    this.mealCount = 0;
     this.ended = false;
     this.nextAttackAt = 0;
-    this.cookHoldMs = 0;
-    this.cookMessageShown = false;
+    this.mealHoldMs = 0;
+    this.mealMessageShown = false;
     this.messageReadyAt = 0;
 
-    // 一度に持てる数・移動速度はここで計算する（料理の効果もここに加える）
+    // 一度に持てる数・移動速度はここで計算する（定食の効果もここに加える）
     this.stats = new PlayerStats({
       baseCapacity: CONFIG.carry.baseCapacity,
       baseSpeed: CONFIG.player.runSpeed,
@@ -41,13 +43,13 @@ export class GameScene extends Phaser.Scene {
       minSpeedRate: CONFIG.carry.minSpeedRate,
     });
 
-    // ステージ（穴のある床・障害物）と、一番上の床の檻・焚き火
+    // ステージ（穴のある床・障害物）と、一番上の床のギルド・食堂
     const { field } = CONFIG;
     this.physics.world.setBounds(field.x, field.y, field.width, field.height);
     this.layout = buildStage(CONFIG);
     const { floors, obstacles, preyFences } = createStageObjects(this, this.layout);
-    this.cage = new Cage(this, this.layout.floors[CONFIG.cage.floor].y);
-    this.campfire = new Campfire(this, this.layout.floors[CONFIG.campfire.floor].y);
+    this.guild = new Guild(this, this.layout.floors[CONFIG.guild.floor].y);
+    this.diner = new Diner(this, this.layout.floors[CONFIG.diner.floor].y);
 
     this.player = new Player(this, CONFIG.player.startX, this.layout.floors[CONFIG.player.startFloor].y);
 
@@ -56,7 +58,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < CONFIG.prey.count; i++) {
       const prey = new Prey(this, this.layout);
       const point = this.findSpawnPoint();
-      prey.spawn(point.x, point.feetY, this.now);
+      prey.spawn(point.x, point.feetY, this.now, point.typeIndex);
       this.preys.push(prey);
     }
 
@@ -80,7 +82,7 @@ export class GameScene extends Phaser.Scene {
     if (this.registry.get('debug')) this.setupDebugKeys();
 
     this.updateHud();
-    this.showBanner('スタート！\n穴から降りて獲物を捕まえ、檻へ運ぼう');
+    this.showBanner('スタート！\n穴から降りて獲物を捕まえ、ギルドへ届けよう');
   }
 
   update(_time, delta) {
@@ -89,9 +91,9 @@ export class GameScene extends Phaser.Scene {
     this.now += dt;
     const now = this.now;
 
-    // 料理の効果の時間切れ
+    // 定食の効果の時間切れ
     if (this.stats.update(now).length > 0) {
-      floatText(this, this.player.x, this.player.y - 130, '料理の効果が切れた', { size: 38 });
+      floatText(this, this.player.x, this.player.y - 130, '定食の効果が切れた', { size: 38 });
     }
 
     // 移動（持っている数が多いほど遅い。ジャンプの高さは変わらない）
@@ -108,9 +110,9 @@ export class GameScene extends Phaser.Scene {
       if (prey.active) prey.think(now, this.player, carried > 0);
     }
 
-    // 檻と焚き火（一番上の床）
-    if (carried > 0 && this.cage.isTouching(this.player.body)) this.depositPrey();
-    this.updateCooking(dt);
+    // ギルドと食堂（一番上の床）
+    if (carried > 0 && this.guild.isTouching(this.player.body)) this.deliverPrey();
+    this.updateMeal(dt);
 
     this.updateHud();
 
@@ -119,15 +121,20 @@ export class GameScene extends Phaser.Scene {
 
   // ---- 獲物の出現 ----
 
-  /** 獲物が出てもよい床の、穴・障害物・檻・焚き火から離れ、プレイヤーからも離れた場所を探す */
+  /**
+   * 新しい獲物の種類と場所を決める。種類ごとに決まった床の、穴・障害物・ギルド・食堂から離れ、
+   * プレイヤーからも離れた場所を探す
+   * @returns {{ x: number, feetY: number, typeIndex: number }}
+   */
   findSpawnPoint() {
-    const { spawnFloors, width, spawnMinDistance } = CONFIG.prey;
-    const half = width / 2;
+    const { types, spawnMinDistance } = CONFIG.prey;
     let point = null;
     for (let i = 0; i < 80; i++) {
-      const floor = this.layout.floors[Phaser.Utils.Array.GetRandom(spawnFloors)];
+      const typeIndex = Phaser.Math.Between(0, types.length - 1);
+      const floor = this.layout.floors[types[typeIndex].floor];
+      const half = types[typeIndex].width / 2;
       const x = Phaser.Math.Between(floor.x1 + half + 10, floor.x2 - half - 10);
-      point = { x, feetY: floor.y };
+      point = { x, feetY: floor.y, typeIndex };
       const ok =
         floorAt(this.layout, x - half - 10, floor.y) &&
         floorAt(this.layout, x + half + 10, floor.y) &&
@@ -183,7 +190,7 @@ export class GameScene extends Phaser.Scene {
   tryCapture(prey) {
     const player = this.player;
     if (player.carried.length >= this.stats.capacity) {
-      this.say(player.x, player.y - 130, 'いっぱい！檻へ運ぼう', '#ffe066');
+      this.say(player.x, player.y - 130, 'いっぱい！ギルドへ運ぼう', '#ffe066');
       return;
     }
     prey.capture();
@@ -200,11 +207,11 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(140, 0.006);
 
     const { field } = CONFIG;
-    const half = CONFIG.prey.width / 2;
     const count = Math.min(CONFIG.carry.escapeOnHit, player.carried.length);
     for (let i = 0; i < count; i++) {
       const prey = player.carried.pop();
-      // 攻撃してきた獲物と反対側へ跳ねて逃げる。檻・焚き火のまわりには逃がさない
+      const half = prey.type.width / 2;
+      // 攻撃してきた獲物と反対側へ跳ねて逃げる。ギルド・食堂のまわりには逃がさない
       let dir = player.x >= attacker.x ? 1 : -1;
       const startX = (d) =>
         Phaser.Math.Clamp(player.x + d * (CONFIG.player.width / 2 + half), field.x + half, field.x + field.width - half);
@@ -214,81 +221,95 @@ export class GameScene extends Phaser.Scene {
     if (count > 0) floatText(this, player.x, player.y - 130, '逃げられた！', { color: '#ff6b6b' });
   }
 
-  // ---- 檻 ----
+  // ---- ギルド ----
 
-  /** 持っている獲物をすべて檻に入れる */
-  depositPrey() {
+  /** 持っている獲物をすべてギルドに売って、お金をもらう */
+  deliverPrey() {
     const player = this.player;
-    const count = player.carried.length;
+    const total = player.carried.reduce((sum, prey) => sum + prey.type.price, 0);
     for (const prey of player.carried) {
-      prey.cage();
+      prey.deliver();
       this.time.delayedCall(CONFIG.prey.respawnDelayMs, () => this.respawn(prey));
     }
     player.carried.length = 0;
-    this.score += count;
-    this.cage.setCount(this.score);
-    this.cage.bounce();
-    floatText(this, CONFIG.cage.x, this.cage.label.y - 120, `+${count}`, { color: '#ffe066', size: 72 });
+    this.wallet.earn(total);
+    this.guild.bounce();
+    this.hud.flashMoney(CONFIG.colors.moneyGain, this.now);
+    // 上の帯に隠れないように、建物のすぐ上から少しだけ浮かせる
+    floatText(this, this.guild.x, this.guild.top - 10, formatMoneyChange(total, CONFIG.money.unit), {
+      color: CONFIG.colors.moneyGain,
+      size: 72,
+      rise: 60,
+      duration: 1100,
+    });
   }
 
-  /** 檻に入れた獲物の代わりを、別の場所に出す */
+  /** ギルドに届けた獲物の代わりを、別の場所に出す（種類も決め直す） */
   respawn(prey) {
     if (this.ended) return;
     const point = this.findSpawnPoint();
-    prey.spawn(point.x, point.feetY, this.now);
+    prey.spawn(point.x, point.feetY, this.now, point.typeIndex);
     prey.setAlpha(0);
     this.tweens.add({ targets: prey, alpha: 1, duration: 300 });
   }
 
-  // ---- 料理 ----
+  // ---- 食堂 ----
 
-  /** 焚き火に触れている間、料理の待ち時間を進める */
-  updateCooking(dt) {
-    const cooking = CONFIG.cooking;
-    if (!this.campfire.isTouching(this.player.body)) {
-      this.cookHoldMs = 0;
-      this.cookMessageShown = false;
-      this.campfire.setProgress(0);
+  /** 食堂に触れている間、食べるまでの待ち時間を進める */
+  updateMeal(dt) {
+    const meal = CONFIG.meal;
+    if (!this.diner.isTouching(this.player.body)) {
+      this.mealHoldMs = 0;
+      this.mealMessageShown = false;
+      this.diner.setProgress(0);
       return;
     }
 
-    const check = checkCooking({ score: this.score, cost: cooking.cost, effectActive: this.stats.hasEffects });
+    const check = checkMeal({ money: this.wallet.money, price: meal.price, effectActive: this.stats.hasEffects });
     if (!check.ok) {
-      this.cookHoldMs = 0;
-      this.campfire.setProgress(0);
-      if (!this.cookMessageShown) {
-        // 触れるたびに1回だけ、料理できない理由を出す
-        this.cookMessageShown = true;
-        const text = check.reason === 'active' ? '料理の効果中は作れない' : `檻の獲物があと${check.missing}匹必要`;
-        floatText(this, this.campfire.x - 120, this.campfire.y - 140, text, { size: 40 });
+      this.mealHoldMs = 0;
+      this.diner.setProgress(0);
+      if (!this.mealMessageShown) {
+        // 触れるたびに1回だけ、食べられない理由を出す
+        this.mealMessageShown = true;
+        const text =
+          check.reason === 'active'
+            ? '定食の効果中は食べられない'
+            : `お金が足りない（あと${formatMoney(check.missing, CONFIG.money.unit)}）`;
+        floatText(this, this.diner.x - 120, this.diner.top + this.diner.height / 2, text, { size: 40 });
       }
       return;
     }
 
-    this.cookHoldMs += dt;
-    this.campfire.setProgress(cooking.holdMs > 0 ? this.cookHoldMs / cooking.holdMs : 1);
-    if (this.cookHoldMs >= cooking.holdMs) this.cook();
+    this.mealHoldMs += dt;
+    this.diner.setProgress(meal.holdMs > 0 ? this.mealHoldMs / meal.holdMs : 1);
+    if (this.mealHoldMs >= meal.holdMs) this.eatMeal();
   }
 
-  /** 檻の獲物を消費して料理し、ランダムな効果を得る */
-  cook() {
-    const cooking = CONFIG.cooking;
-    this.cookHoldMs = 0;
-    this.cookMessageShown = true; // 焚き火から離れるまで「効果中」の表示は出さない
-    this.campfire.setProgress(0);
+  /** お金を払って日替わり定食を食べ、ランダムな効果を得る */
+  eatMeal() {
+    const meal = CONFIG.meal;
+    this.mealHoldMs = 0;
+    this.mealMessageShown = true; // 食堂から離れるまで「効果中」の表示は出さない
+    this.diner.setProgress(0);
 
-    this.score -= cooking.cost;
-    this.cookCount += 1;
-    this.cage.setCount(this.score);
-    this.cage.bounce();
+    this.wallet.spend(meal.price);
+    this.mealCount += 1;
+    this.hud.flashMoney(CONFIG.colors.moneyLoss, this.now);
+    floatText(this, this.diner.x, this.diner.top - 10, formatMoneyChange(-meal.price, CONFIG.money.unit), {
+      color: CONFIG.colors.moneyLoss,
+      size: 72,
+      rise: 60,
+      duration: 1100,
+    });
 
-    const effect = rollCookingEffect(cooking);
-    this.stats.addEffect(effect.type, effect.value, cooking.durationMs, this.now);
-    this.campfire.burst();
-    this.showBanner(`料理完成！\n${describeEffect(effect)}（${cooking.durationMs / 1000}秒）`, '#ffe066');
+    const effect = rollMealEffect(meal);
+    this.stats.addEffect(effect.type, effect.value, meal.durationMs, this.now);
+    this.diner.burst();
+    this.showBanner(`日替わり定食！\n${describeEffect(effect)}（${meal.durationMs / 1000}秒）`, '#ffe066');
   }
 
-  /** 効いている料理の効果に合わせて、プレイヤーのまわりの輪の色を変える */
+  /** 効いている定食の効果に合わせて、プレイヤーのまわりの輪の色を変える */
   refreshAura() {
     const types = this.stats.activeEffects(this.now).map((effect) => effect.type);
     this.player.setAura(types.includes(EFFECT_CAPACITY) ? CONFIG.colors.capacityAura : null);
@@ -300,13 +321,14 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     this.controls.setEnabled(false);
     this.physics.pause();
-    this.campfire.setProgress(0);
+    this.diner.setProgress(0);
     this.updateHud();
     addText(this, CONFIG.screen.width / 2, 1000, 'タイムアップ！', { size: 112, color: '#ffe066', stroke: 12 }).setDepth(
       DEPTH.effect + 1,
     );
     this.time.delayedCall(CONFIG.round.endDelayMs, () => {
-      this.scene.start(SCENES.result, { score: this.score, cookCount: this.cookCount });
+      const { money, earned, spent } = this.wallet;
+      this.scene.start(SCENES.result, { money, earned, spent, mealCount: this.mealCount });
     });
   }
 
@@ -325,8 +347,9 @@ export class GameScene extends Phaser.Scene {
     this.player.drawCarryIcons(capacity);
     this.refreshAura();
     this.hud.update({
+      now: this.now,
       remainingMs: Math.max(0, CONFIG.round.timeLimitSec * 1000 - this.now),
-      score: this.score,
+      money: this.wallet.money,
       carried,
       capacity,
       speedRate: this.stats.carryRate(carried),
@@ -349,11 +372,11 @@ export class GameScene extends Phaser.Scene {
     floatText(this, x, y, text, { color, size: 40 });
   }
 
-  /** ?debug のときだけ：C キーで料理の効果を即付与（檻の獲物は消費しない） */
+  /** ?debug のときだけ：C キーで定食の効果を即付与（お金は減らない） */
   setupDebugKeys() {
     this.input.keyboard?.on('keydown-C', () => {
-      const effect = rollCookingEffect(CONFIG.cooking);
-      this.stats.addEffect(effect.type, effect.value, CONFIG.cooking.durationMs, this.now);
+      const effect = rollMealEffect(CONFIG.meal);
+      this.stats.addEffect(effect.type, effect.value, CONFIG.meal.durationMs, this.now);
       this.showBanner(`[debug] ${describeEffect(effect)}`, '#66e0ff');
     });
   }

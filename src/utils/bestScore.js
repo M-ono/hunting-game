@@ -1,6 +1,7 @@
-// ベストスコアをブラウザに保存する。プライベートモードなどで保存できなくても遊べるようにする
+// ベスト記録（終わったときの所持金）をブラウザに保存する。プライベートモードなどで保存できなくても遊べるようにする
 
-const KEY = 'hunting-game:best-score';
+// 記録が「檻に入れた数」から「お金」に変わったので、前の記録とは別の名前で保存する
+const KEY = 'hunting-game:best-money';
 
 export function loadBestScore() {
   try {

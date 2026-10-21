@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatClock, formatDuration } from '../src/utils/format.js';
+import { formatClock, formatDuration, formatMoney, formatMoneyChange } from '../src/utils/format.js';
 
 test('残り時間は「分:秒」で、端数は切り上げ', () => {
   assert.equal(formatClock(300000), '5:00');
@@ -10,6 +10,13 @@ test('残り時間は「分:秒」で、端数は切り上げ', () => {
   assert.equal(formatClock(9500), '0:10');
   assert.equal(formatClock(0), '0:00');
   assert.equal(formatClock(-100), '0:00');
+});
+
+test('お金と、その増減の表示', () => {
+  assert.equal(formatMoney(120, 'G'), '120G');
+  assert.equal(formatMoney(0, 'ゴールド'), '0ゴールド');
+  assert.equal(formatMoneyChange(30, 'G'), '+30G');
+  assert.equal(formatMoneyChange(-20, 'G'), '−20G');
 });
 
 test('制限時間の言葉', () => {

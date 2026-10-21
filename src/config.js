@@ -20,7 +20,7 @@ export const CONFIG = {
     endDelayMs: 1500, // 「タイムアップ！」を見せてからリザルトに移るまで
   },
 
-  // 遊ぶ範囲。上の 0〜200 は時間やスコアを表示する帯
+  // 遊ぶ範囲。上の 0〜200 は時間や所持金を表示する帯
   field: {
     x: 0,
     y: 200,
@@ -40,7 +40,7 @@ export const CONFIG = {
     jumpHeight: 420, // ジャンプの高さ。床の間隔（今は330）より高いので、穴を通り抜けて一段上の床に乗れる
     coyoteMs: 90, // 床から足が離れた直後でもジャンプできる猶予
     jumpBufferMs: 120, // 着地の少し前に入れたジャンプを受け付ける猶予
-    startFloor: 4, // 最初に立つ床（下から0, 1, 2…）。一番上の床の檻のそばから出発する
+    startFloor: 4, // 最初に立つ床（下から0, 1, 2…）。一番上の床のギルドのそばから出発する
     startX: 340,
     invincibleMs: 1000, // 攻撃を受けた直後の無敵時間（仮：1秒）
   },
@@ -64,10 +64,16 @@ export const CONFIG = {
 
   prey: {
     count: 7, // ステージにいる獲物の数（持ち運び中も含む）
-    width: 60, // 当たり判定の大きさ
-    height: 44,
     maxHp: 1, // 何回攻撃すると気絶するか（1 = 1回の攻撃で気絶）
-    spawnFloors: [0, 1, 2, 3], // 獲物が出てくる床（一番上の床には出さない）
+    // 獲物の種類。深い段ほど高く売れて、体も大きい。floor の床に出てくる（一番上の床には出さない）。
+    // price は売値、width と height は当たり判定の大きさ。値段は色で見分ける
+    // （色に赤と灰色は使わない。襲ってくる「!」・気絶「★」の目印と紛らわしいため）
+    types: [
+      { floor: 3, price: 10, width: 60, height: 44, color: 0xd9a066, edge: 0x6b4423 }, // 茶：一番上のすぐ下の段
+      { floor: 2, price: 20, width: 68, height: 50, color: 0x5fcf6a, edge: 0x2c6e34 }, // 緑
+      { floor: 1, price: 30, width: 76, height: 56, color: 0x4aa3ff, edge: 0x1d4f8c }, // 青
+      { floor: 0, price: 40, width: 86, height: 62, color: 0xb06cff, edge: 0x52307f }, // 紫：地面
+    ],
     wanderSpeed: 120, // うろうろ歩く速さ（床の端では引き返す）
     wanderTurnMs: [1000, 2600], // 向きを変える間隔（最短, 最長）
     idleChance: 0.25, // 向きを変えるときに立ち止まる確率
@@ -79,9 +85,9 @@ export const CONFIG = {
     attackCooldownMs: 1200, // 1匹が攻撃したあと、次に攻撃してくるまで
     escapeSpeed: 420, // プレイヤーの手から逃げ出すときに飛び出す速さ（横）
     escapeJump: 520, // 逃げ出すときに跳ねる勢い（上）
-    respawnDelayMs: 1500, // 檻に入れたあと、新しい獲物が出てくるまで（仕様外の仮追加）
+    respawnDelayMs: 1500, // ギルドに届けたあと、新しい獲物が出てくるまで（仕様外の仮追加）
     spawnMinDistance: 350, // 新しい獲物はプレイヤーからこれ以上離れた場所に出る
-    keepOutMargin: 160, // 檻と焚き火のまわり、この距離以内には獲物が入らない（出現もしない）
+    keepOutMargin: 160, // ギルドと食堂のまわり、この距離以内には獲物が入らない（出現もしない）
   },
 
   // 床（下から順に 0, 1, 2…）。y は床の上面の高さ。x1〜x2 が床のある範囲（省略すると画面の端から端まで）。
@@ -93,7 +99,7 @@ export const CONFIG = {
     { y: 1510, holes: [{ x: 800, width: 260 }] },
     { y: 1180, holes: [{ x: 280, width: 260 }] },
     { y: 850, holes: [{ x: 800, width: 260 }] },
-    { y: 520, holes: [{ x: 540, width: 260 }] }, // 4: 一番上（檻と焚き火）。穴は檻と焚き火の間
+    { y: 520, holes: [{ x: 540, width: 260 }] }, // 4: 一番上（ギルドと食堂）。穴はギルドと食堂の間
   ],
   floorThickness: 36, // thickness を書いていない床の厚さ
 
@@ -105,29 +111,35 @@ export const CONFIG = {
     { floor: 3, x: 320, w: 70, h: 70 },
   ],
 
-  // 檻（触れると持っている獲物をすべて入れる。入れた数がスコア）。floor の床の上に置く
-  cage: {
+  // ギルド（触れると持っている獲物をすべて売って、お金をもらう）。floor の床の上に置く
+  guild: {
     floor: 4,
     x: 170, // 中心の位置
     width: 220,
-    height: 150,
-    touchMargin: 20, // 檻のまわり、この距離まで近づけば入れられる
+    height: 170,
+    touchMargin: 20, // ギルドのまわり、この距離まで近づけば届けられる
   },
 
-  // 焚き火（触れて少し待つと料理）。floor の床の上に置く
-  campfire: {
+  // 食堂（触れて少し待つと、お金を払って日替わり定食を食べる）。floor の床の上に置く
+  diner: {
     floor: 4,
     x: 920, // 中心の位置
-    radius: 55,
-    touchMargin: 20, // 焚き火のまわり、この距離まで近づけば料理できる
+    width: 200,
+    height: 150,
+    touchMargin: 20, // 食堂のまわり、この距離まで近づけば食べられる
   },
 
-  // 料理：檻の獲物（スコア）を消費して、しばらくの間「一度に持てる数」がランダム（2〜4匹）になる
-  cooking: {
-    cost: 2, // 1回の料理で使う檻の獲物の数（仮：2匹）
-    holdMs: 800, // 焚き火に触れたまま待つ時間（0 にすると触れた瞬間に料理）
+  // お金（獲物を売ると増え、食堂で使うと減る。終わったときの所持金が記録になる）
+  money: {
+    unit: 'G', // 表示する単位。名前は自由に変えてよい（例：'ゴールド'）
+  },
+
+  // 日替わり定食：お金を払って食べると、しばらくの間「一度に持てる数」がランダム（2〜4匹）になる
+  meal: {
+    price: 20, // 定食の値段（仮：20G）
+    holdMs: 800, // 食堂に触れたまま待つ時間（0 にすると触れた瞬間に食べる）
     durationMs: 15000, // 効果が続く時間（仮：15秒）
-    capacityMin: 2, // 料理したときの所持上限は、この範囲からランダム（2〜4匹）
+    capacityMin: 2, // 食べたときの持てる数は、この範囲からランダム（2〜4匹）
     capacityMax: 4,
   },
 
@@ -158,17 +170,18 @@ export const CONFIG = {
     girderEdge: 0x7b241c,
     obstacle: 0x8a8f98,
     obstacleEdge: 0x5b6068,
-    player: 0x3d7cff,
-    playerEdge: 0xffffff,
-    prey: 0xd9a066,
-    preyEdge: 0x6b4423,
-    preyAggroTint: 0xff6b6b,
-    preyStunTint: 0x9a9a9a,
-    cage: 0x8b5a2b,
-    cageFloor: 0x3a2a1a,
-    campfire: 0xff8c1a,
-    campfireCore: 0xffe066,
+    player: 0xf4f1e8, // 白：獲物の色（値段）と見分けやすいように
+    playerEdge: 0x1a2a55,
+    preyAggro: 0xff5555, // 襲ってくる獲物のまわりの輪（獲物の体の色は値段を表すので変えない）
+    guildWall: 0xa0703c,
+    guildRoof: 0x5b3a29,
+    guildDoor: 0x3a2a1a,
+    dinerWall: 0xe8d9b5,
+    dinerRoof: 0x3b3b4f,
+    dinerNoren: 0x1f3a66,
     attackRing: 0xffffff,
     capacityAura: 0xffd84d,
+    moneyGain: '#ffe066', // お金が増えたとき（文字の色）
+    moneyLoss: '#ff6b6b', // お金が減ったとき
   },
 };

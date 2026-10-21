@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
-import { SCENES, TEXTURES } from '../constants.js';
+import { SCENES, TEXTURES, preyTextureKey } from '../constants.js';
 
 /**
  * 起動直後のシーン。仮素材（図形）のテクスチャを作ってタイトルへ進む。
@@ -14,7 +14,7 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     this.makePlayerTexture();
-    this.makePreyTexture();
+    this.makePreyTextures();
     this.scene.start(SCENES.title);
   }
 
@@ -32,20 +32,23 @@ export class BootScene extends Phaser.Scene {
     g.destroy();
   }
 
-  /** 獲物（横向きの小動物）：耳・体・目・しっぽ */
-  makePreyTexture() {
-    const { width: w, height: h } = CONFIG.prey;
-    const { prey, preyEdge } = CONFIG.colors;
-    const g = this.add.graphics();
-    g.fillStyle(prey, 1);
-    g.fillTriangle(w - 26, 14, w - 18, 0, w - 12, 14); // 耳
-    g.fillTriangle(w - 16, 14, w - 8, 2, w - 4, 16);
-    g.fillEllipse(w / 2 + 2, h / 2 + 6, w - 8, h - 12); // 体
-    g.fillCircle(6, h / 2 + 2, 6); // しっぽ
-    g.lineStyle(4, preyEdge, 1).strokeEllipse(w / 2 + 2, h / 2 + 6, w - 10, h - 14);
-    g.fillStyle(0x2b1a0e, 1).fillCircle(w - 14, h / 2 + 2, 4); // 目
-    g.fillStyle(0x6b4423, 1).fillCircle(w - 6, h / 2 + 9, 3); // 鼻
-    g.generateTexture(TEXTURES.prey, w, h);
-    g.destroy();
+  /** 獲物（横向きの小動物）：耳・体・目・しっぽ。種類ごとに色と大きさを変える（形は 60×44 を基準に拡大） */
+  makePreyTextures() {
+    CONFIG.prey.types.forEach((type, index) => {
+      const { width: w, height: h, color, edge } = type;
+      const sx = w / 60;
+      const sy = h / 44;
+      const g = this.add.graphics();
+      g.fillStyle(color, 1);
+      g.fillTriangle(w - 26 * sx, 14 * sy, w - 18 * sx, 0, w - 12 * sx, 14 * sy); // 耳
+      g.fillTriangle(w - 16 * sx, 14 * sy, w - 8 * sx, 2 * sy, w - 4 * sx, 16 * sy);
+      g.fillEllipse(w / 2 + 2 * sx, h / 2 + 6 * sy, w - 8 * sx, h - 12 * sy); // 体
+      g.fillCircle(6 * sx, h / 2 + 2 * sy, 6 * sx); // しっぽ
+      g.lineStyle(4, edge, 1).strokeEllipse(w / 2 + 2 * sx, h / 2 + 6 * sy, w - 10 * sx, h - 14 * sy);
+      g.fillStyle(0x2b1a0e, 1).fillCircle(w - 14 * sx, h / 2 + 2 * sy, 4 * sx); // 目
+      g.fillStyle(edge, 1).fillCircle(w - 6 * sx, h / 2 + 9 * sy, 3 * sx); // 鼻
+      g.generateTexture(preyTextureKey(index), w, h);
+      g.destroy();
+    });
   }
 }

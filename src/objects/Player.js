@@ -29,11 +29,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.carried = [];
     this.invincibleUntil = 0;
 
-    // 頭の上に「持てる数」の枠と「持っている数」を表示
+    // 頭の上に「持てる数」の枠と「持っている獲物」（獲物の色＝値段）を表示
     this.carryIcons = scene.add.graphics().setDepth(DEPTH.player + 1);
     this.iconsKey = '';
 
-    // 料理の効果中に体のまわりに出す輪
+    // 定食の効果中に体のまわりに出す輪
     this.auraColor = null;
     this.aura = scene.add
       .ellipse(x, this.y, this.cfg.width + 40, this.cfg.height + 40)
@@ -110,7 +110,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.aura.setPosition(this.x, this.y);
   }
 
-  /** 料理の効果の輪（color = null で消す）。色が変わったときだけ描き直す */
+  /** 定食の効果の輪（color = null で消す）。色が変わったときだけ描き直す */
   setAura(color) {
     if (color === this.auraColor) return;
     this.auraColor = color;
@@ -121,10 +121,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  /** 頭の上の表示を更新（変化があったときだけ描き直す） */
+  /** 頭の上の表示を更新（変化があったときだけ描き直す）。持っている獲物は、その獲物の色の丸で描く */
   drawCarryIcons(capacity) {
     const carried = this.carried.length;
-    const key = `${carried}/${capacity}`;
+    const key = `${this.carried.map((prey) => prey.typeIndex).join(',')}/${capacity}`;
     if (key === this.iconsKey) return;
     this.iconsKey = key;
 
@@ -135,8 +135,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     for (let i = 0; i < slots; i++) {
       const x = startX + i * gap;
       if (i < carried) {
-        g.fillStyle(CONFIG.colors.prey, 1).fillCircle(x, 0, 13);
-        g.lineStyle(4, CONFIG.colors.preyEdge, 1).strokeCircle(x, 0, 13);
+        const { color, edge } = this.carried[i].type;
+        g.fillStyle(color, 1).fillCircle(x, 0, 13);
+        g.lineStyle(4, edge, 1).strokeCircle(x, 0, 13);
       } else {
         g.lineStyle(4, 0xffffff, 0.7).strokeCircle(x, 0, 13);
       }
