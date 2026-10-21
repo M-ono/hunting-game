@@ -8,7 +8,7 @@ import { Player } from '../objects/Player.js';
 import { Prey } from '../objects/Prey.js';
 import { createStageObjects } from '../objects/Stage.js';
 import { checkCooking, describeEffect, rollCookingEffect } from '../systems/cooking.js';
-import { EFFECT_CAPACITY, EFFECT_SPEED, PlayerStats } from '../systems/PlayerStats.js';
+import { EFFECT_CAPACITY, PlayerStats } from '../systems/PlayerStats.js';
 import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt } from '../systems/stageLayout.js';
 import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
@@ -97,8 +97,7 @@ export class GameScene extends Phaser.Scene {
     // 移動（持っている数が多いほど遅い。ジャンプの高さは変わらない）
     const input = this.controls.read();
     const carried = this.player.carried.length;
-    const speedRate = this.stats.speedRate * this.stats.carryRate(carried);
-    this.player.updateMovement(now, input, CONFIG.player.runSpeed * speedRate);
+    this.player.updateMovement(now, input, this.stats.moveSpeed(carried));
 
     // 攻撃
     const wantsAttack = input.attack || (CONFIG.controls.autoAttack && this.hasPreyInAttackRange());
@@ -292,9 +291,7 @@ export class GameScene extends Phaser.Scene {
   /** 効いている料理の効果に合わせて、プレイヤーのまわりの輪の色を変える */
   refreshAura() {
     const types = this.stats.activeEffects(this.now).map((effect) => effect.type);
-    if (types.includes(EFFECT_CAPACITY)) this.player.setAura(CONFIG.colors.capacityAura);
-    else if (types.includes(EFFECT_SPEED)) this.player.setAura(CONFIG.colors.speedAura);
-    else this.player.setAura(null);
+    this.player.setAura(types.includes(EFFECT_CAPACITY) ? CONFIG.colors.capacityAura : null);
   }
 
   // ---- 終了 ----
@@ -332,7 +329,7 @@ export class GameScene extends Phaser.Scene {
       score: this.score,
       carried,
       capacity,
-      speedRate: this.stats.speedRate * this.stats.carryRate(carried),
+      speedRate: this.stats.carryRate(carried),
       effects: this.stats.activeEffects(this.now),
     });
   }

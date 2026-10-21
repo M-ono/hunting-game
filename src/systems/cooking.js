@@ -1,18 +1,15 @@
-// 料理：檻の獲物（スコア）を消費して、ランダムで一時的な効果を得る。
+// 料理：檻の獲物（スコア）を消費して、しばらくの間「一度に持てる数」がランダムに増える。
 // Phaser に依存しないので、node --test で単体テストできる。
 
-import { EFFECT_CAPACITY, EFFECT_SPEED } from './PlayerStats.js';
+import { EFFECT_CAPACITY } from './PlayerStats.js';
 
 /**
- * 料理の効果をランダムに1つ決める。
+ * 料理の効果を決める：一度に持てる数を capacityMin〜capacityMax からランダムに選ぶ。
  * @param {typeof import('../config.js').CONFIG.cooking} cooking 設定
  * @param {() => number} random 0以上1未満を返す関数（テスト用に差し替え可能）
  * @returns {{ type: string, value: number }}
  */
 export function rollCookingEffect(cooking, random = Math.random) {
-  if (random() < cooking.speedChance) {
-    return { type: EFFECT_SPEED, value: cooking.speedBonus };
-  }
   const span = cooking.capacityMax - cooking.capacityMin + 1;
   const value = cooking.capacityMin + Math.min(span - 1, Math.floor(random() * span));
   return { type: EFFECT_CAPACITY, value };
@@ -34,7 +31,6 @@ export function checkCooking({ score, cost, effectActive }) {
 
 /** 効果の表示用テキスト */
 export function describeEffect({ type, value }) {
-  if (type === EFFECT_SPEED) return `移動速度 +${Math.round(value * 100)}%`;
   if (type === EFFECT_CAPACITY) return `所持上限 ${value}匹`;
   return type;
 }

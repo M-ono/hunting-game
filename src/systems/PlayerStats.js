@@ -1,9 +1,8 @@
 // プレイヤーの能力値（一度に持てる数・移動速度）を計算する。
-// 料理などの一時的な効果は、必ず addEffect() を通して加える。
+// 料理などの一時的な効果（今は「一度に持てる数」だけ）は、必ず addEffect() を通して加える。
 // Phaser に依存しないので、node --test で単体テストできる。
 
 export const EFFECT_CAPACITY = 'capacity'; // value = 一度に持てる数（例：3）
-export const EFFECT_SPEED = 'speed'; // value = 速度の上乗せ割合（例：0.3 = +30%）
 
 export class PlayerStats {
   /**
@@ -24,7 +23,7 @@ export class PlayerStats {
 
   /**
    * 一時的な効果を加える。
-   * @param {string} type EFFECT_CAPACITY か EFFECT_SPEED
+   * @param {string} type 効果の種類（EFFECT_CAPACITY）
    * @param {number} value 効果の値
    * @param {number} durationMs 効果が続く時間
    * @param {number} now 現在のゲーム内時刻（ms）
@@ -66,19 +65,13 @@ export class PlayerStats {
     return effect ? Math.max(this.baseCapacity, effect.value) : this.baseCapacity;
   }
 
-  /** 効果による速度の倍率（1 = 通常） */
-  get speedRate() {
-    const effect = this.effects.get(EFFECT_SPEED);
-    return 1 + (effect ? effect.value : 0);
-  }
-
   /** 持っている数による速度の倍率（1匹ごとに slowdownPerPrey ずつ下がる） */
   carryRate(carried) {
     return Math.max(this.minSpeedRate, 1 - this.slowdownPerPrey * carried);
   }
 
-  /** 実際の移動速度 = 基本速度 × 効果の倍率 × 持ち運びの倍率 */
+  /** 実際の移動速度 = 基本速度 × 持ち運びの倍率 */
   moveSpeed(carried) {
-    return this.baseSpeed * this.speedRate * this.carryRate(carried);
+    return this.baseSpeed * this.carryRate(carried);
   }
 }

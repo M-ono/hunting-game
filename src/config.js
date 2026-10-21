@@ -122,14 +122,12 @@ export const CONFIG = {
     touchMargin: 20, // 焚き火のまわり、この距離まで近づけば料理できる
   },
 
-  // 料理：檻の獲物（スコア）を消費して、ランダムで一時的な効果を得る
+  // 料理：檻の獲物（スコア）を消費して、しばらくの間「一度に持てる数」がランダム（2〜4匹）になる
   cooking: {
     cost: 2, // 1回の料理で使う檻の獲物の数（仮：2匹）
     holdMs: 800, // 焚き火に触れたまま待つ時間（0 にすると触れた瞬間に料理）
     durationMs: 15000, // 効果が続く時間（仮：15秒）
-    speedChance: 0.5, // 「移動速度アップ」になる確率。それ以外は「所持上限アップ」
-    speedBonus: 0.3, // 移動速度アップの量（仮：+30%）
-    capacityMin: 2, // 所持上限アップのとき、上限はこの範囲からランダム（2〜4匹）
+    capacityMin: 2, // 料理したときの所持上限は、この範囲からランダム（2〜4匹）
     capacityMax: 4,
   },
 
@@ -171,7 +169,6 @@ export const CONFIG = {
     campfire: 0xff8c1a,
     campfireCore: 0xffe066,
     attackRing: 0xffffff,
-    speedAura: 0x66e0ff,
     capacityAura: 0xffd84d,
   },
 };
