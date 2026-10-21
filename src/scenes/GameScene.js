@@ -9,7 +9,7 @@ import { Prey } from '../objects/Prey.js';
 import { createStageObjects } from '../objects/Stage.js';
 import { checkMeal, describeEffect, rollMealEffect } from '../systems/meal.js';
 import { EFFECT_CAPACITY, PlayerStats } from '../systems/PlayerStats.js';
-import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt } from '../systems/stageLayout.js';
+import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt, randomCourse } from '../systems/stageLayout.js';
 import { Wallet } from '../systems/Wallet.js';
 import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
@@ -43,10 +43,12 @@ export class GameScene extends Phaser.Scene {
       minSpeedRate: CONFIG.carry.minSpeedRate,
     });
 
-    // ステージ（穴のある床・障害物）と、一番上の床のギルド・食堂
+    // ステージ（穴のある床・障害物）と、一番上の床のギルド・食堂。
+    // 一番上以外の穴と岩は、プレイのたびにランダム（遊べる配置が作れなければ設定の配置）
     const { field } = CONFIG;
     this.physics.world.setBounds(field.x, field.y, field.width, field.height);
-    this.layout = buildStage(CONFIG);
+    const course = CONFIG.course.random ? randomCourse(CONFIG) : null;
+    this.layout = buildStage(course ? { ...CONFIG, ...course } : CONFIG);
     const { floors, obstacles, preyFences } = createStageObjects(this, this.layout);
     this.guild = new Guild(this, this.layout.floors[CONFIG.guild.floor].y);
     this.diner = new Diner(this, this.layout.floors[CONFIG.diner.floor].y);
@@ -82,7 +84,7 @@ export class GameScene extends Phaser.Scene {
     if (this.registry.get('debug')) this.setupDebugKeys();
 
     this.updateHud();
-    this.showBanner('スタート！\n穴から降りて獲物を捕まえ、ギルドへ届けよう');
+    this.showBanner('スタート！\n穴から降りて獲物を捕まえ\nギルドへ届けよう');
   }
 
   update(_time, delta) {

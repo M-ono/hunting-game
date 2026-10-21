@@ -4,12 +4,14 @@ import { CONFIG } from '../src/config.js';
 import {
   buildStage,
   canJumpUp,
+  checkCourse,
   floorAt,
   floorGaps,
   floorSegments,
   isClearOfObstacles,
   noPreyZoneAt,
   onSameLevel,
+  randomCourse,
 } from '../src/systems/stageLayout.js';
 
 const stage = buildStage(CONFIG);
@@ -97,59 +99,75 @@ test('ギルドと食堂のまわりは獲物が入れない', () => {
   assert.equal(noPreyZoneAt(mini, 100, 1000), null); // 下の段は関係ない
 });
 
-test('設定のステージ：どの床からも、穴を通って一段上の床に乗れる（一番上まで行ける）', () => {
-  const floors = [...stage.floors].sort((a, b) => b.y - a.y); // 下から順
-  const options = {
-    jumpHeight: CONFIG.player.jumpHeight,
-    bodyWidth: CONFIG.player.width,
-    fieldX1: CONFIG.field.x,
-    fieldX2: CONFIG.field.x + CONFIG.field.width,
+// 決まった種（seed）から毎回同じ並びの乱数を作る（ランダムなコースのテストを毎回同じ結果にするため）
+function seededRandom(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  for (let i = 0; i + 1 < floors.length; i++) {
-    assert.ok(
-      canJumpUp(floors[i], floors[i + 1], options),
-      `床${floors[i].index} → 床${floors[i + 1].index} に登れない（間隔 ${floors[i].y - floors[i + 1].y}px、ジャンプ ${CONFIG.player.jumpHeight}px、穴の幅を確認）`,
-    );
-  }
-  assert.equal(floors.at(-1).index, CONFIG.guild.floor, 'ギルドは一番上の床にある');
-  assert.equal(floors.at(-1).index, CONFIG.diner.floor, '食堂は一番上の床にある');
+}
+
+const courseStage = (course) => buildStage({ ...CONFIG, ...course });
+
+test('設定の配置のコースは遊べる（登れる・一段下に落ちる・足場・岩・獲物の出る場所）', () => {
+  assert.deepEqual(checkCourse(stage, CONFIG), []);
+  const top = [...stage.floors].sort((a, b) => a.y - b.y)[0];
+  assert.equal(top.index, CONFIG.guild.floor, 'ギルドは一番上の床にある');
+  assert.equal(top.index, CONFIG.diner.floor, '食堂は一番上の床にある');
 });
 
-test('設定のステージ：地面以外のどの床にも、飛び降りられる穴がある', () => {
-  const lowest = Math.max(...stage.floors.map((f) => f.y));
-  const right = CONFIG.field.x + CONFIG.field.width;
-  for (const floor of stage.floors) {
-    if (floor.y === lowest) continue;
-    const widths = floorGaps(floor, CONFIG.field.x, right).map((gap) => gap.x2 - gap.x1);
-    assert.ok(
-      widths.some((width) => width >= CONFIG.player.width + 40),
-      `床${floor.index}にプレイヤーが落ちられる幅の穴がない`,
-    );
-  }
+test('遊べないコースは checkCourse で見つかる', () => {
+  const floorsWith = (index, holes) => CONFIG.floors.map((floor, i) => (i === index ? { ...floor, holes } : floor));
+  // 上下の段の穴が重なる（2段続けて落ちてしまう）
+  const overlap = checkCourse(courseStage({ floors: floorsWith(3, [{ x: 540, width: 260 }]) }), CONFIG);
+  assert.ok(overlap.some((problem) => problem.includes('重なっている')), overlap.join(' / '));
+  // 穴が狭くて登れない
+  const narrow = checkCourse(courseStage({ floors: floorsWith(2, [{ x: 280, width: 80 }]) }), CONFIG);
+  assert.ok(narrow.some((problem) => problem.includes('登れない')), narrow.join(' / '));
+  // 岩が一段上の穴の真下にある
+  const rock = checkCourse(courseStage({ obstacles: [{ floor: 3, x: 540, w: 70, h: 70 }] }), CONFIG);
+  assert.ok(rock.some((problem) => problem.includes('真下')), rock.join(' / '));
 });
 
-test('設定のステージ：上下の段の穴が横に重ならない（穴から落ちると必ず一段下に着く）', () => {
-  const floors = [...stage.floors].sort((a, b) => b.y - a.y); // 下から順
-  const right = CONFIG.field.x + CONFIG.field.width;
-  for (let i = 1; i + 1 < floors.length; i++) {
-    const lowerHoles = floorGaps(floors[i], CONFIG.field.x, right);
-    const upperHoles = floorGaps(floors[i + 1], CONFIG.field.x, right);
-    for (const a of upperHoles) {
-      for (const b of lowerHoles) {
-        assert.ok(
-          Math.min(a.x2, b.x2) <= Math.max(a.x1, b.x1),
-          `床${floors[i + 1].index}の穴 ${a.x1}〜${a.x2} と、床${floors[i].index}の穴 ${b.x1}〜${b.x2} が重なっている`,
-        );
-      }
+test('ランダムなコース：1000通りすべて遊べて、一番上の床・地面・床の高さは変わらない', () => {
+  const random = seededRandom(1);
+  const top = CONFIG.floors.length - 1;
+  const [minRocks, maxRocks] = CONFIG.course.rocksPerFloor;
+  for (let i = 0; i < 1000; i++) {
+    const course = randomCourse(CONFIG, random);
+    assert.ok(course, `${i}回目：遊べるコースが作れなかった`);
+    const randomStage = courseStage(course);
+    assert.deepEqual(checkCourse(randomStage, CONFIG), [], `${i}回目：${JSON.stringify(course)}`);
+    assert.deepEqual(randomStage.floors[top], stage.floors[top], '一番上の床が変わった');
+    assert.deepEqual(randomStage.floors[0].segments, stage.floors[0].segments, '地面に穴があいた');
+    assert.deepEqual(
+      course.floors.map((floor) => floor.y),
+      CONFIG.floors.map((floor) => floor.y),
+      '床の高さが変わった',
+    );
+    for (let floor = 0; floor < top; floor++) {
+      const rocks = course.obstacles.filter((obstacle) => obstacle.floor === floor).length;
+      assert.ok(rocks >= minRocks && rocks <= maxRocks, `床${floor}の岩が${rocks}個`);
     }
   }
 });
 
-test('設定のステージ：穴のふちの足場が狭すぎない（獲物やプレイヤーが乗れる）', () => {
-  for (const floor of stage.floors) {
-    for (const segment of floor.segments) {
-      assert.ok(segment.x2 - segment.x1 >= 120, `床${floor.index}の足場 ${segment.x1}〜${segment.x2} が狭すぎる`);
-    }
+test('ランダムなコース：毎回同じにはならない（穴の位置がいろいろ出る）', () => {
+  const random = seededRandom(2);
+  const layouts = new Set();
+  const holeXs = CONFIG.floors.map(() => new Set());
+  for (let i = 0; i < 200; i++) {
+    const course = randomCourse(CONFIG, random);
+    layouts.add(JSON.stringify(course));
+    course.floors.forEach((floor, index) => (floor.holes ?? []).forEach((hole) => holeXs[index].add(hole.x)));
+  }
+  assert.ok(layouts.size > 150, `コースが${layouts.size}通りしか出ない`);
+  for (let index = 1; index < CONFIG.floors.length - 1; index++) {
+    assert.ok(holeXs[index].size >= 4, `床${index}の穴の位置が${holeXs[index].size}通りしか出ない`);
   }
 });
 
@@ -184,23 +202,5 @@ test('設定の獲物：ギルドのある一番上の床には出ない', () =>
   for (const type of CONFIG.prey.types) {
     assert.ok(stage.floors[type.floor], `床${type.floor}がない`);
     assert.notEqual(type.floor, CONFIG.guild.floor, '一番上の床に獲物が出る');
-  }
-});
-
-test('設定のステージ：獲物が出る床のどこかに、入れない範囲の外がある', () => {
-  for (const type of CONFIG.prey.types) {
-    const floor = stage.floors[type.floor];
-    let free = 0;
-    for (let x = floor.x1 + 40; x <= floor.x2 - 40; x += 20) {
-      if (
-        floorAt(stage, x - type.width / 2, floor.y) &&
-        floorAt(stage, x + type.width / 2, floor.y) &&
-        !noPreyZoneAt(stage, x, floor.y) &&
-        isClearOfObstacles(stage, type.floor, x, type.width / 2)
-      ) {
-        free++;
-      }
-    }
-    assert.ok(free > 5, `床${type.floor}に獲物（${type.price}）の出られる場所がない`);
   }
 });

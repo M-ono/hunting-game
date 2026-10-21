@@ -23,9 +23,11 @@ export function addText(scene, x, y, text, { size = 48, color = '#ffffff', bold 
     .setOrigin(0.5);
 }
 
-/** ふわっと浮かんで消える文字（「+1」「いっぱい！」など） */
+/** ふわっと浮かんで消える文字（「+30G」「いっぱい！」など）。壁際でも画面の内側に収まるように横の位置をずらす */
 export function floatText(scene, x, y, text, { color = '#ffffff', size = 46, rise = 90, duration = 900 } = {}) {
   const label = addText(scene, x, y, text, { size, color }).setDepth(DEPTH.effect);
+  const half = label.width / 2 + 8;
+  label.setX(Math.min(Math.max(x, half), CONFIG.screen.width - half));
   scene.tweens.add({
     targets: label,
     y: y - rise,
