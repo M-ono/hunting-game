@@ -156,9 +156,22 @@ export const CONFIG = {
     capacityMax: 4,
   },
 
-  // 操作（片手）：ドラッグでスティック。左右で移動、上にはじくとジャンプ（斜め上にはじくと移動しながらジャンプ）。タップで攻撃
+  // 操作（片手）
+  // mode: 'pad'   … ゲーム画面の下の操作パネル。右下に固定の十字キー（◀▶ 移動・▲ ジャンプ・斜め上で移動しながらジャンプ）と、その左に攻撃ボタン
+  // mode: 'stick' … 前の操作。画面のどこでもドラッグでスティック、上にはじいてジャンプ、タップで攻撃
   controls: {
+    mode: 'pad',
     autoAttack: false, // true にすると、攻撃範囲に獲物がいるとき自動で攻撃する
+    // --- 十字キー（mode: 'pad'） ---
+    padSide: 'right', // 十字キーを置く側。'left' にすると十字キーと攻撃ボタンの左右が入れ替わる（左手で遊ぶとき）
+    panelHeight: 440, // 操作パネルの高さ。ゲーム画面の下に足す（縦の短い画面では、そのぶんゲーム画面が小さくなる）
+    padRadius: 170, // 十字キーの大きさ（半径）
+    padMargin: 60, // 十字キーと画面の端の間（端からのスワイプで「戻る」にならないように離す）
+    padDeadZone: 28, // 十字キーの中心からこれ以内を触っても何もしない
+    padJumpAngle: 35, // 水平からこの角度以上、上を触るとジャンプ（斜め上なら移動しながら）
+    padMoveThreshold: 0.38, // 横向きの割合がこれ以上なら左右に移動（真上に近いと、その場でジャンプ）
+    attackRadius: 120, // 攻撃ボタンの大きさ（半径）。押したままなら連続で攻撃する
+    // --- スティック（mode: 'stick'） ---
     joystickRadius: 110, // 仮想スティックの大きさ
     deadZone: 24, // 指をこれ以上動かすと移動を始める
     moveThreshold: 0.3, // スティックの横方向がこれ以上なら左右に移動
@@ -193,6 +206,8 @@ export const CONFIG = {
     dinerRoof: 0x3b3b4f,
     dinerNoren: 0x1f3a66,
     attackRing: 0xffffff,
+    attackButton: 0xff8c42, // 攻撃ボタン
+    controlLit: 0xffe066, // 十字キーの押している向き
     capacityAura: 0xffd84d,
     moneyGain: '#ffe066', // お金が増えたとき（文字の色）
     moneyLoss: '#ff6b6b', // お金が減ったとき

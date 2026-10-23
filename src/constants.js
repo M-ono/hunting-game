@@ -5,6 +5,7 @@ export const SCENES = {
   title: 'Title',
   game: 'Game',
   result: 'Result',
+  pause: 'Pause',
 };
 
 // 仮素材のテクスチャ名。同じ名前で画像を読み込めば、本番の絵に差し替えられる

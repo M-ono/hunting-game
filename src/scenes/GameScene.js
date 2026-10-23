@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH, SCENES } from '../constants.js';
 import { OneHandControls } from '../input/OneHandControls.js';
+import { PadControls } from '../input/PadControls.js';
 import { Diner } from '../objects/Diner.js';
 import { Guild } from '../objects/Guild.js';
 import { Player } from '../objects/Player.js';
@@ -13,6 +14,7 @@ import { buildStage, floorAt, isClearOfObstacles, noPreyZoneAt, randomCourse } f
 import { Wallet } from '../systems/Wallet.js';
 import { Hud } from '../ui/Hud.js';
 import { addText, floatText } from '../ui/text.js';
+import { guardBackNavigation } from '../utils/backGuard.js';
 import { keepCameraCentered } from '../utils/camera.js';
 import { formatMoney, formatMoneyChange } from '../utils/format.js';
 
@@ -23,7 +25,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    keepCameraCentered(this);
+    // 十字キーの操作パネルはゲーム画面の下に足す。収まらない画面では、全体を少し縮小して表示する
+    const padMode = CONFIG.controls.mode === 'pad';
+    keepCameraCentered(this, CONFIG.screen.height + (padMode ? CONFIG.controls.panelHeight : 0));
     this.physics.resume();
 
     this.now = 0; // ゲーム内時刻（ms）。タブを切り替えている間は進まない
@@ -72,13 +76,26 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.preys, preyFences);
     this.physics.add.overlap(this.player, this.preys, this.onPlayerTouchPrey, undefined, this);
 
-    this.controls = new OneHandControls(this);
+    this.controls = padMode ? new PadControls(this) : new OneHandControls(this);
     this.hud = new Hud(this);
 
     // 物理演算で位置が決まったあとに、頭の上の表示などを合わせる
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncAttachments, this);
+
+    // 遊んでいる途中の「戻る」操作（画面の端からのスワイプなど）やアプリの切り替えでは、ページを離れずに一時停止する
+    const pause = () => this.pauseGame();
+    const releaseControls = () => this.controls.release(); // 再開したとき、止まる前に押していた指は離したことにする
+    const unguardBack = guardBackNavigation(pause);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, pause);
+    this.game.events.on(Phaser.Core.Events.BLUR, pause);
+    this.events.on(Phaser.Scenes.Events.RESUME, releaseControls);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncAttachments, this);
+      this.events.off(Phaser.Scenes.Events.RESUME, releaseControls);
+      unguardBack();
+      this.game.events.off(Phaser.Core.Events.HIDDEN, pause);
+      this.game.events.off(Phaser.Core.Events.BLUR, pause);
     });
 
     if (this.registry.get('debug')) this.setupDebugKeys();
@@ -317,7 +334,15 @@ export class GameScene extends Phaser.Scene {
     this.player.setAura(types.includes(EFFECT_CAPACITY) ? CONFIG.colors.capacityAura : null);
   }
 
-  // ---- 終了 ----
+  // ---- 一時停止・終了 ----
+
+  /** 一時停止して、上に「一時停止（タップで再開）」を重ねる。時間・獲物・効果の残り時間も止まる */
+  pauseGame() {
+    if (this.ended || !this.scene.isActive()) return;
+    this.controls.release();
+    this.scene.pause();
+    this.scene.launch(SCENES.pause);
+  }
 
   endRound() {
     this.ended = true;

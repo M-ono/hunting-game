@@ -22,13 +22,24 @@ export class TitleScene extends Phaser.Scene {
     this.add.rectangle(cx, height / 2, width, height, CONFIG.colors.field);
     addText(this, cx, 330, 'ハンティング\nゲーム（仮）', { size: 116, stroke: 12 }).setLineSpacing(10);
 
+    const side = CONFIG.controls.padSide === 'left' ? '左下' : '右下';
+    const controlsHowTo =
+      CONFIG.controls.mode === 'pad'
+        ? [
+            `${side}の十字キー … ◀ ▶ 移動　▲ ジャンプ`,
+            '　斜め上を押す … 移動しながらジャンプ',
+            '攻撃ボタン … まわりを攻撃（押したままで連続）',
+          ]
+        : [
+            '画面のどこでもドラッグ … スティック',
+            '　左右に倒す … 移動',
+            '　上にはじく … ジャンプ（斜め上で移動しながら）',
+            'タップ … まわりを攻撃',
+          ];
     const howTo = [
-      '画面のどこでもドラッグ … スティック',
-      '　左右に倒す … 移動',
-      '　上にはじく … ジャンプ（斜め上で移動しながら）',
+      ...controlsHowTo,
       '床の穴をジャンプで通り抜ける … 上の段へ',
       '床の穴から飛び降りる … 下の段へ',
-      'タップ … まわりを攻撃',
       `${prey.maxHp === 1 ? '攻撃を当てる' : `${prey.maxHp}回当てる`}と獲物が気絶 → ふれて捕まえる`,
       '一番上のギルドに届ける … 獲物を売ってお金に',
       `食堂 … ${yen(meal.price)}で日替わり定食（持てる数が${meal.capacityMin}〜${meal.capacityMax}匹に）`,

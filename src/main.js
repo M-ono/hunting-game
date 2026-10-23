@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CONFIG } from './config.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
+import { PauseScene } from './scenes/PauseScene.js';
 import { ResultScene } from './scenes/ResultScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 
@@ -19,11 +20,14 @@ const game = new Phaser.Game({
     width: CONFIG.screen.width,
     height: CONFIG.screen.height,
   },
+  // 十字キーと攻撃ボタンを2本の指で同時に押せるように、指を3本まで受け付ける
+  input: { activePointers: 3 },
   physics: {
     default: 'arcade',
     arcade: { gravity: { x: 0, y: CONFIG.physics.gravity }, debug },
   },
-  scene: [BootScene, TitleScene, GameScene, ResultScene],
+  // PauseScene は本編の上に重ねて表示するので、GameScene より後ろに置く
+  scene: [BootScene, TitleScene, GameScene, ResultScene, PauseScene],
 });
 
 game.registry.set('debug', debug);

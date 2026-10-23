@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH } from '../constants.js';
+import { addControlKeys, applyControlKeys } from './keyboard.js';
 
 /**
- * 片手操作
+ * 片手操作（controls.mode: 'stick'）
  * - 画面のどこでもドラッグ：指を置いた位置に仮想スティックが出る
  *   - 左右に倒す：移動
  *   - 上にはじく：ジャンプ（一段上の床まで届く）。下の段へは床の穴から飛び降りる
@@ -45,9 +46,7 @@ export class OneHandControls {
     scene.input.on('pointerup', this.onPointerUp, this);
     scene.input.on('pointerupoutside', this.onPointerUp, this);
 
-    if (scene.input.keyboard) {
-      this.keys = scene.input.keyboard.addKeys('W,A,D,UP,LEFT,RIGHT,SPACE,Z,J');
-    }
+    this.keys = addControlKeys(scene);
 
     // タブ切り替えなどで指の状態が分からなくなったら離したことにする
     scene.game.events.on(Phaser.Core.Events.BLUR, this.release, this);
@@ -65,15 +64,7 @@ export class OneHandControls {
     input.attack = this.attackQueued;
     this.jumpQueued = false;
     this.attackQueued = false;
-
-    if (this.keys) {
-      const k = this.keys;
-      const JustDown = Phaser.Input.Keyboard.JustDown;
-      const x = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
-      if (x !== 0) input.x = x;
-      if (JustDown(k.UP) || JustDown(k.W) || JustDown(k.SPACE)) input.jump = true;
-      if (JustDown(k.Z) || JustDown(k.J)) input.attack = true;
-    }
+    applyControlKeys(this.keys, input);
 
     if (!this.enabled) {
       input.x = 0;
