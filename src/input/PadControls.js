@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH } from '../constants.js';
 import { addText } from '../ui/text.js';
+import { onPadSide, padDirection, padLayout } from './controlLayout.js';
+import { addPanelBackground, drawArrows } from './controlPanel.js';
 import { addControlKeys, applyControlKeys } from './keyboard.js';
-import { onPadSide, padDirection, padLayout } from './padLayout.js';
 
 /**
- * 固定の操作パネル（controls.mode: 'pad'）。ゲーム画面の下に置く
+ * 十字キーと攻撃ボタン（controls.mode: 'pad'）。ゲーム画面の下の操作パネルに置く
  * - 十字キー（右下）：◀ ▶ で移動、▲ でジャンプ、斜め上で移動しながらジャンプ。
  *   触った位置で向きが決まる（指をずらさなくてよい）。上を触ったままでは1回だけ跳ぶ
  * - 攻撃ボタン（十字キーの左）：押すと攻撃。押したままなら連続で攻撃
@@ -139,15 +140,9 @@ export class PadControls {
 
   createPanel() {
     const scene = this.scene;
-    const { width } = CONFIG.screen;
     const { top, bottom, pad, attack } = this.layout;
     const depth = DEPTH.controls;
-    // パネルの背景。ゲーム画面を縮小して左右や下に余白が見えても切れないよう、大きめに敷く
-    const extra = 1000;
-    scene.add
-      .rectangle(width / 2, top + (bottom - top + extra) / 2, width * 3, bottom - top + extra, CONFIG.colors.hudBand)
-      .setDepth(depth - 1);
-    scene.add.rectangle(width / 2, top, width * 3, 4, 0xffffff, 0.15).setDepth(depth - 1);
+    addPanelBackground(scene, top, bottom);
 
     scene.add.circle(pad.x, pad.y, pad.radius, 0xffffff, 0.06).setStrokeStyle(5, 0xffffff, 0.3).setDepth(depth);
     this.attackButton = scene.add
@@ -162,30 +157,7 @@ export class PadControls {
   redraw() {
     const g = this.graphics.clear();
     const { pad } = this.layout;
-    const { x, jump } = this.direction;
-    const pressed = this.padPointerId !== null;
-    // deg の向きの矢印（0 = 右、90 = 上）
-    const arrow = (deg, size, lit) => {
-      const a = (deg * Math.PI) / 180;
-      const ux = Math.cos(a);
-      const uy = -Math.sin(a);
-      const cx = pad.x + ux * pad.radius * 0.62;
-      const cy = pad.y + uy * pad.radius * 0.62;
-      g.fillStyle(lit ? CONFIG.colors.controlLit : 0xffffff, lit ? 1 : 0.55);
-      g.fillTriangle(
-        cx + ux * size,
-        cy + uy * size,
-        cx - ux * size * 0.6 - uy * size * 0.85,
-        cy - uy * size * 0.6 + ux * size * 0.85,
-        cx - ux * size * 0.6 + uy * size * 0.85,
-        cy - uy * size * 0.6 - ux * size * 0.85,
-      );
-    };
-    arrow(0, 36, pressed && x > 0 && !jump);
-    arrow(180, 36, pressed && x < 0 && !jump);
-    arrow(90, 36, pressed && jump && x === 0);
-    arrow(45, 24, pressed && jump && x > 0);
-    arrow(135, 24, pressed && jump && x < 0);
+    drawArrows(g, pad, pad.radius * 0.62, this.padPointerId !== null ? this.direction : null, 36, 0.55);
     if (this.knob) g.fillStyle(0xffffff, 0.3).fillCircle(this.knob.x, this.knob.y, 44);
     this.attackButton.setFillStyle(CONFIG.colors.attackButton, this.attackPointerId !== null ? 0.75 : 0.3);
   }

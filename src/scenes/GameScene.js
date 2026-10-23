@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { DEPTH, SCENES } from '../constants.js';
-import { OneHandControls } from '../input/OneHandControls.js';
 import { PadControls } from '../input/PadControls.js';
+import { StickControls } from '../input/StickControls.js';
 import { Diner } from '../objects/Diner.js';
 import { Guild } from '../objects/Guild.js';
 import { Player } from '../objects/Player.js';
@@ -25,9 +25,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // 十字キーの操作パネルはゲーム画面の下に足す。収まらない画面では、全体を少し縮小して表示する
-    const padMode = CONFIG.controls.mode === 'pad';
-    keepCameraCentered(this, CONFIG.screen.height + (padMode ? CONFIG.controls.panelHeight : 0));
+    // 操作パネル（ジョイスティック・十字キー）はゲーム画面の下に足す。収まらない画面では、全体を少し縮小して表示する
+    const { mode, panelHeight } = CONFIG.controls;
+    keepCameraCentered(this, CONFIG.screen.height + (mode === 'stick' ? 0 : panelHeight));
     this.physics.resume();
 
     this.now = 0; // ゲーム内時刻（ms）。タブを切り替えている間は進まない
@@ -76,7 +76,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.preys, preyFences);
     this.physics.add.overlap(this.player, this.preys, this.onPlayerTouchPrey, undefined, this);
 
-    this.controls = padMode ? new PadControls(this) : new OneHandControls(this);
+    this.controls = mode === 'pad' ? new PadControls(this) : new StickControls(this, { panel: mode === 'joystick' });
     this.hud = new Hud(this);
 
     // 物理演算で位置が決まったあとに、頭の上の表示などを合わせる

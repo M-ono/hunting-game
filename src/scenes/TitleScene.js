@@ -23,19 +23,24 @@ export class TitleScene extends Phaser.Scene {
     addText(this, cx, 330, 'ハンティング\nゲーム（仮）', { size: 116, stroke: 12 }).setLineSpacing(10);
 
     const side = CONFIG.controls.padSide === 'left' ? '左下' : '右下';
-    const controlsHowTo =
-      CONFIG.controls.mode === 'pad'
-        ? [
-            `${side}の十字キー … ◀ ▶ 移動　▲ ジャンプ`,
-            '　斜め上を押す … 移動しながらジャンプ',
-            '攻撃ボタン … まわりを攻撃（押したままで連続）',
-          ]
-        : [
-            '画面のどこでもドラッグ … スティック',
-            '　左右に倒す … 移動',
-            '　上にはじく … ジャンプ（斜め上で移動しながら）',
-            'タップ … まわりを攻撃',
-          ];
+    const controlsHowTo = {
+      joystick: [
+        `${side}のジョイスティック … 倒して移動`,
+        '　上にはじく … ジャンプ（斜め上で移動しながら）',
+        '　軽くタップ … まわりを攻撃',
+      ],
+      pad: [
+        `${side}の十字キー … ◀ ▶ 移動　▲ ジャンプ`,
+        '　斜め上を押す … 移動しながらジャンプ',
+        '攻撃ボタン … まわりを攻撃（押したままで連続）',
+      ],
+      stick: [
+        '画面のどこでもドラッグ … スティック',
+        '　左右に倒す … 移動',
+        '　上にはじく … ジャンプ（斜め上で移動しながら）',
+        'タップ … まわりを攻撃',
+      ],
+    }[CONFIG.controls.mode];
     const howTo = [
       ...controlsHowTo,
       '床の穴をジャンプで通り抜ける … 上の段へ',
