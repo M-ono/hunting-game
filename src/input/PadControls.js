@@ -5,6 +5,7 @@ import { addText } from '../ui/text.js';
 import { onPadSide, padDirection, padLayout } from './controlLayout.js';
 import { addPanelBackground, drawArrows } from './controlPanel.js';
 import { addControlKeys, applyControlKeys } from './keyboard.js';
+import { rejectEdgeTouch } from './screenEdge.js';
 
 /**
  * 十字キーと攻撃ボタン（controls.mode: 'pad'）。ゲーム画面の下の操作パネルに置く
@@ -93,6 +94,7 @@ export class PadControls {
     if (!this.enabled) return;
     const p = this.toWorld(pointer);
     if (p.y < this.layout.zoneTop) return; // ゲーム画面を触っても何もしない
+    if (rejectEdgeTouch(this.scene, pointer)) return; // 画面の端から触り始めたときは操作にしない
     if (onPadSide(this.layout, p.x)) {
       if (this.padPointerId !== null) return;
       this.padPointerId = pointer.id;

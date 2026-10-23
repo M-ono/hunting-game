@@ -51,6 +51,19 @@ export function onPadSide(layout, x) {
   return layout.padSide === 'left' ? x <= layout.split : x >= layout.split;
 }
 
+/**
+ * 画面の端の近くか。端から始めたタッチは操作にしない（左右の端からのスワイプは「戻る」、下の端からはホームへの移動になりやすい）。
+ * @param {{ x: number, y: number }} point 画面の左上から見た指の位置（CSS px）
+ * @param {{ width: number, height: number }} screen 画面の大きさ（CSS px）
+ * @returns {'left' | 'right' | 'bottom' | null} 近い端
+ */
+export function nearScreenEdge(point, screen, { edgeGuardSide, edgeGuardBottom }) {
+  if (point.x < edgeGuardSide) return 'left';
+  if (point.x > screen.width - edgeGuardSide) return 'right';
+  if (point.y > screen.height - edgeGuardBottom) return 'bottom';
+  return null;
+}
+
 /** 中心から見た指の位置（dx, dy。y は下が正）を、左右の移動とジャンプに分ける */
 function direction(dx, dy, { deadZone, moveThreshold, jumpAngle, jumpMinDistance }) {
   const distance = Math.hypot(dx, dy);

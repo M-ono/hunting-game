@@ -5,12 +5,14 @@ import { addText } from '../ui/text.js';
 import { joystickLayout, leftJumpZone, stickDirection } from './controlLayout.js';
 import { addPanelBackground, drawArrows } from './controlPanel.js';
 import { addControlKeys, applyControlKeys } from './keyboard.js';
+import { rejectEdgeTouch } from './screenEdge.js';
 
 /**
  * ジョイスティック操作。倒して移動、上にはじいてジャンプ（斜め上で移動しながら）、軽くタップで攻撃。親指1本で全部できる
+ * - panel: false（controls.mode: 'stick'）：画面のどこを触っても、触った位置に出る（最初の版）
  * - panel: true（controls.mode: 'joystick'）：ゲーム画面の下の操作パネルに置く。ふだんは右下に出しておき、
  *   パネルのどこを触っても触った位置に出る。ゲーム画面を触っても何も起きない
- * - panel: false（controls.mode: 'stick'）：画面のどこを触っても、触った位置に出る（最初の版）
+ * - 画面の左右の端・下の端から触り始めたときは操作にしない（「戻る」やホームへの移動になりやすいので。端を少し光らせる）
  * - 触った位置が中心になるので、触った瞬間に動き出したりはしない（倒した向きだけで決まる）
  * - 指がジョイスティックの外まで行くと、ジョイスティックごとついてくる（逆向きにすぐ切り返せる）
  * - PC：←→/AD で移動、↑/W/Space でジャンプ、Z/J で攻撃
@@ -114,6 +116,7 @@ export class StickControls {
     if (!this.enabled || this.pointerId !== null) return;
     const p = this.toWorld(pointer);
     if (this.layout && p.y < this.layout.top) return; // ゲーム画面を触っても何もしない
+    if (rejectEdgeTouch(this.scene, pointer)) return;
     this.pointerId = pointer.id;
     this.origin.set(p.x, p.y);
     this.knob.set(p.x, p.y);

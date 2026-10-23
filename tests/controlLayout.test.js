@@ -4,6 +4,7 @@ import { CONFIG } from '../src/config.js';
 import {
   joystickLayout,
   leftJumpZone,
+  nearScreenEdge,
   onPadSide,
   padDirection,
   padLayout,
@@ -15,6 +16,19 @@ const at = (deg, distance = 100) => {
   const a = (deg * Math.PI) / 180;
   return [Math.cos(a) * distance, -Math.sin(a) * distance];
 };
+
+// ---- 画面の端 ----
+
+test('画面の左右の端・下の端から触ったタッチは、操作にしない（「戻る」やホームへの移動になりやすい）', () => {
+  const screen = { width: 390, height: 844 };
+  const guard = { edgeGuardSide: 32, edgeGuardBottom: 24 };
+  assert.equal(nearScreenEdge({ x: 10, y: 400 }, screen, guard), 'left');
+  assert.equal(nearScreenEdge({ x: 380, y: 400 }, screen, guard), 'right');
+  assert.equal(nearScreenEdge({ x: 200, y: 835 }, screen, guard), 'bottom');
+  assert.equal(nearScreenEdge({ x: 40, y: 400 }, screen, guard), null);
+  assert.equal(nearScreenEdge({ x: 350, y: 810 }, screen, guard), null);
+  assert.equal(nearScreenEdge({ x: 200, y: 5 }, screen, guard), null); // 上の端は使える
+});
 
 // ---- ジョイスティック ----
 
